@@ -40,7 +40,7 @@ func (d *DB) ConfigureShrimp(ctx context.Context, resource string) error {
 	if previous != resource {
 		return errors.New("pilot database belongs to another resource")
 	}
-	return nil
+	return d.configureShrimpEnumeration(ctx)
 }
 
 // ShrimpWindow persists the executable window before returning it to a client.

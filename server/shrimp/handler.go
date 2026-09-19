@@ -94,7 +94,7 @@ func New(ctx context.Context, s *store.Store, config Config) (*Handler, error) {
 		hash := sha256.Sum256(b)
 		entries = append(entries, map[string]any{"id": schema.ID, "path": "/schemas/" + filepath.Base(path), "sha256": hex.EncodeToString(hash[:])})
 	}
-	for name, ref := range map[string]string{"mutation": "mutation-v0.2.schema.json#/$defs/request", "read": "read-sync-v0.2.schema.json#/$defs/read_request", "read_response": "read-sync-v0.2.schema.json#/$defs/read_response", "receipt": "receipt-v0.2.schema.json", "discovery": "discovery-v0.2.schema.json"} {
+	for name, ref := range map[string]string{"mutation": "mutation-v0.2.schema.json#/$defs/request", "read": "read-sync-v0.2.schema.json#/$defs/read_request", "read_response": "read-sync-v0.2.schema.json#/$defs/read_response", "enumeration": "read-sync-v0.2.schema.json#/$defs/enumeration_request", "enumeration_page": "read-sync-v0.2.schema.json#/$defs/enumeration_page", "receipt": "receipt-v0.2.schema.json", "discovery": "discovery-v0.2.schema.json"} {
 		schema := &jsonschema.Schema{Ref: "https://shrimp.example/schemas/0.2/" + ref}
 		resolved, err := schema.Resolve(&jsonschema.ResolveOptions{Loader: func(uri *url.URL) (*jsonschema.Schema, error) {
 			s, ok := catalog[uri.String()]
@@ -113,8 +113,12 @@ func New(ctx context.Context, s *store.Store, config Config) (*Handler, error) {
 	}
 	h.discovery["resource"] = config.Resource
 	h.discovery["scope"] = map[string]any{"tenant": "acme", "domain": "A"}
-	h.discovery["discovery_revision"] = "memos-pilot-1"
+	h.discovery["discovery_revision"] = "memos-pilot-2"
 	contract := h.discovery["versions"].([]any)[0].(map[string]any)
+	limits := contract["limits"].(map[string]any)
+	limits["max_enumeration_page_records"] = store.ShrimpEnumerationMaxPage
+	limits["max_open_enumerations_per_principal"] = store.ShrimpEnumerationMaxOpen
+	limits["min_enumeration_cursor_lifetime_seconds"] = store.ShrimpEnumerationLifetime
 	contract["schemas"] = entries
 	contract["dependency_issuers"] = []any{map[string]any{"resource": config.Resource, "domains": []string{"A"}}}
 	if err := h.resolved["discovery"].Validate(h.discovery); err != nil {
@@ -207,6 +211,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.mutate(w, r, claims)
 	case r.Method == "POST" && path == "/reads":
 		h.read(w, r)
+	case r.Method == "POST" && path == "/enumerations":
+		h.enumerate(w, r, claims)
 	case r.Method == "GET" && strings.HasPrefix(path, "/operations/"):
 		parts := strings.Split(strings.TrimPrefix(path, "/operations/"), "/")
 		if len(parts) != 2 {
@@ -421,14 +427,8 @@ func (h *Handler) read(w http.ResponseWriter, r *http.Request) {
 		h.problem(w, 404, "not_found", "read")
 		return
 	}
-	revision := s.Revision
-	var value any = map[string]any{"profile": "human", "lifecycle": s.Lifecycle, "expires_at": nil, "attributes": map[string]any{"displayName": map[string]any{"value": s.DisplayName, "authority": h.config.Authority, "revision": s.Revision}}}
-	if kind == "source_reference" {
-		revision = s.SourceRevision
-		value = map[string]any{"subject": ref("subject", s.ID), "external_id": s.SourceReference, "state": "associated"}
-	}
-	record := map[string]any{"type": kind, "id": id, "revision": revision, "authority": h.config.Authority, "deleted": false, "value": value}
-	response := map[string]any{"scope": h.scope(), "observed_frontier": frontier, "state_validator": revision, "validator_expires_at": stamp(time.Now().Unix() + 60), "record": record}
+	record := h.directRecord(store.ShrimpRecord{Type: kind, ID: id, Subject: *s})
+	response := map[string]any{"scope": h.scope(), "observed_frontier": frontier, "state_validator": record["revision"], "validator_expires_at": stamp(time.Now().Unix() + 60), "record": record}
 	if err := h.resolved["read_response"].Validate(response); err != nil {
 		h.problem(w, 500, "invalid_read_response", "read")
 		return

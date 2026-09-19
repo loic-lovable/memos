@@ -26,7 +26,8 @@
         "mutation.submit",
         "operation.read",
         "replay_window.read",
-        "resource.read"
+        "resource.read",
+        "resource.enumerate"
       ],
       "schemas": [],
       "limits": {
@@ -64,7 +65,7 @@
         }
       ],
       "binding_mechanisms": [],
-      "healthy_conditions": "Disposable single-process SQLite pilot with at most 10000 retained operations. Only listed operations, one human command per mutation, source reference plus displayName required on creation; displayName-only updates. No complete profile, public audit, enumeration, sync, existing-session revocation, backup restore, or multi-process admission guarantee.",
+      "healthy_conditions": "Disposable single-process SQLite pilot with at most 10000 retained operations. Only listed operations, one human command per mutation, source reference plus displayName required on creation; displayName-only updates. No complete profile, public audit, sync, existing-session revocation, backup restore, or multi-process admission guarantee.",
       "audit_surface": {
         "families": [
           "subject",
@@ -73,7 +74,16 @@
         "unauthenticated_traffic": false,
         "ordinary_reads": false
       },
-      "profiles": []
+      "profiles": [],
+      "enumeration": {
+        "resource_types": [
+          "source_reference",
+          "subject"
+        ],
+        "representation": "full-direct-records",
+        "consistency": "per-page-current",
+        "ordering": "type-id-utf8-ascending"
+      }
     }
   ]
 }

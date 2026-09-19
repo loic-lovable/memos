@@ -52,6 +52,7 @@ type ShrimpDriver interface {
 	ApplyShrimp(context.Context, ShrimpMutation) (*ShrimpResult, error)
 	ShrimpResult(context.Context, string, string, string) (*ShrimpResult, error)
 	ReadShrimp(context.Context, string, []string) (*ShrimpSubject, string, error)
+	EnumerateShrimp(context.Context, ShrimpEnumeration, func(*ShrimpEnumerationPage) (bool, error)) (*ShrimpEnumerationPage, error)
 	ShrimpAdmission(context.Context, int32) (*User, string, error)
 	ShrimpPasswordAdmission(context.Context, string) (*User, string, error)
 	ConsumeShrimpProof(context.Context, string, int64) error
