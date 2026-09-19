@@ -161,8 +161,11 @@ func (a *Authenticator) resolveBearer(ctx context.Context, token string) (*beare
 			if err != nil {
 				return nil, err
 			}
-			if user != nil && user.RowStatus != store.Archived {
-				return &bearerAuth{user: user, claims: claims}, nil
+			if user != nil {
+				if user.RowStatus != store.Archived {
+					return &bearerAuth{user: user, claims: claims}, nil
+				}
+				observeArchivedAccessToken(ctx, user.ID)
 			}
 		}
 		return nil, nil

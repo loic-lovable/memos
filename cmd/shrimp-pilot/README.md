@@ -38,6 +38,15 @@ its pilot runner. This application branch starts at Memos
 - Private controls can hold the real issuance paths and exit the process just
   before/after SQLite commit. These controls are mounted only by this command
   and require a random bearer secret. They do not invent outcomes or receipts.
+- A private authentication observation binds one native PAT-creation request to
+  its enrolled subject, exact POST route and an opaque one-use handle. The auth
+  hook records only when that request's valid access token resolves to an archived
+  user; the inspector also requires the actual 401 response. Handles expire after
+  60 seconds, reads consume them, and the launcher keeps at most 32. Invalid,
+  expired, wrong-user, ambiguous and reused requests cannot establish a denial.
+  Inspection requires the separate TLS control credential. Public response status,
+  headers and body stay unchanged; neither credentials nor hashes are recorded.
+  The ordinary Memos launcher does not install this observer or its controls.
 
 The SQLite database is bound to one resource, issuer/key ID, client and authority.
 It cannot be restarted under a different enrollment. The pilot process takes an

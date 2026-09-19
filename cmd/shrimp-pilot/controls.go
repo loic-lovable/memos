@@ -28,11 +28,12 @@ type controls struct {
 	store               *store.Store
 	token               string
 	holds               map[string]*heldAdmission
+	observations        map[string]*authObservation
 	faultID, faultPoint string
 }
 
 func newControls(s *store.Store, token string) *controls {
-	return &controls{store: s, token: token, holds: map[string]*heldAdmission{}}
+	return &controls{store: s, token: token, holds: map[string]*heldAdmission{}, observations: map[string]*authObservation{}}
 }
 
 func (c *controls) beforePublication(ctx context.Context, user int32, kind string) error {
@@ -96,6 +97,12 @@ func (c *controls) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *controls) apply(ctx context.Context, action, subject, kind, handle, operation, point string) (any, error) {
+	if action == "arm-auth" {
+		return c.armAuth(ctx, subject, kind)
+	}
+	if action == "observe-auth" {
+		return c.readAuth(handle)
+	}
 	var userID int32
 	if action == "arm" {
 		s, _, err := c.store.GetDriver().(store.ShrimpDriver).ReadShrimp(ctx, subject, nil)

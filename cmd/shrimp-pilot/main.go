@@ -113,7 +113,7 @@ func run(path string) error {
 	e.POST("/__pilot/control", echo.WrapHandler(control))
 	e.Any("/__pilot/audit", echo.WrapHandler(handler.OperationalAuditHandler(config.AuditToken)))
 	e.GET("/healthz", func(c *echo.Context) error { return c.String(200, "pilot ready") })
-	server := &http.Server{Addr: config.Address, Handler: admissionTransport(e), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 45 * time.Second, IdleTimeout: 30 * time.Second}
+	server := &http.Server{Addr: config.Address, Handler: admissionTransport(control.observeRequests(e)), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 45 * time.Second, IdleTimeout: 30 * time.Second}
 	ended := make(chan error, 1)
 	go func() { ended <- server.ListenAndServeTLS(config.Certificate, config.Key) }()
 	select {
