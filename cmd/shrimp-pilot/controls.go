@@ -39,7 +39,7 @@ func (c *controls) beforePublication(ctx context.Context, user int32, kind strin
 	c.mu.Lock()
 	var hold *heldAdmission
 	for _, candidate := range c.holds {
-		if candidate.user == user && candidate.kind == kind && !candidate.entered {
+		if candidate.user == user && candidate.kind == kind && !candidate.entered && !candidate.resumed {
 			candidate.entered = true
 			hold = candidate
 			break
@@ -115,7 +115,7 @@ func (c *controls) apply(ctx context.Context, action, subject, kind, handle, ope
 			return nil, errors.New("hold limit")
 		}
 		for _, old := range c.holds {
-			if old.user == userID && old.kind == kind && !old.resumed {
+			if old.user == userID && old.kind == kind && !old.entered && !old.resumed {
 				return nil, errors.New("already held")
 			}
 		}
