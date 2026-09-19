@@ -9,6 +9,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ErrShrimpManagedWrite rejects native changes to source-owned lifecycle facts.
+var ErrShrimpManagedWrite = errors.New("managed lifecycle and display name require SHRIMP authority; retire before native deletion")
+
 // ErrAdmissionDenied means the current account or original attempt is fenced.
 var ErrAdmissionDenied = errors.New("account admission fenced")
 
@@ -37,6 +40,7 @@ type ShrimpMutation struct {
 
 // ShrimpResult is immutable commit evidence retained with the account write.
 type ShrimpResult struct {
+	AuditAttempt        string
 	Subject             ShrimpSubject
 	Token               string
 	Time, RetainedUntil int64

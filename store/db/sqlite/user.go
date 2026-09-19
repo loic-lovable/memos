@@ -31,6 +31,9 @@ func (d *DB) UpdateUser(ctx context.Context, update *store.UpdateUser) (*store.U
 	if err := trackShrimpNativeUpdate(ctx, tx, update); err != nil {
 		return nil, err
 	}
+	if err := journalShrimpNative(ctx, tx, update.ID); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}

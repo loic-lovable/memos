@@ -34,6 +34,7 @@ type configuration struct {
 	Key           string        `json:"key"`
 	SessionSecret string        `json:"session_secret"`
 	AdminPassword string        `json:"admin_password"`
+	AuditToken    string        `json:"audit_token"`
 	ControlToken  string        `json:"control_token"`
 }
 
@@ -58,8 +59,11 @@ func run(path string) error {
 	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
 		return errors.New("pilot listener must use a loopback IP")
 	}
-	if len(config.SessionSecret) < 32 || len(config.AdminPassword) < 20 || len(config.ControlToken) < 32 {
+	if len(config.SessionSecret) < 32 || len(config.AdminPassword) < 20 || len(config.ControlToken) < 32 || len(config.AuditToken) < 32 {
 		return errors.New("pilot secrets must be randomly generated")
+	}
+	if config.AuditToken == config.ControlToken || config.AuditToken == config.SessionSecret || config.AuditToken == config.AdminPassword {
+		return errors.New("audit credential must have separate authority")
 	}
 	if err := os.MkdirAll(config.Data, 0700); err != nil {
 		return err
@@ -107,6 +111,7 @@ func run(path string) error {
 	e.Any("/shrimp/*", echo.WrapHandler(handler))
 	e.GET("/.well-known/oauth-protected-resource/*", echo.WrapHandler(handler))
 	e.POST("/__pilot/control", echo.WrapHandler(control))
+	e.Any("/__pilot/audit", echo.WrapHandler(handler.OperationalAuditHandler(config.AuditToken)))
 	e.GET("/healthz", func(c *echo.Context) error { return c.String(200, "pilot ready") })
 	server := &http.Server{Addr: config.Address, Handler: admissionTransport(e), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 45 * time.Second, IdleTimeout: 30 * time.Second}
 	ended := make(chan error, 1)

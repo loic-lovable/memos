@@ -113,7 +113,7 @@ func New(ctx context.Context, s *store.Store, config Config) (*Handler, error) {
 	}
 	h.discovery["resource"] = config.Resource
 	h.discovery["scope"] = map[string]any{"tenant": "acme", "domain": "A"}
-	h.discovery["discovery_revision"] = "memos-pilot-2"
+	h.discovery["discovery_revision"] = "memos-pilot-3"
 	contract := h.discovery["versions"].([]any)[0].(map[string]any)
 	limits := contract["limits"].(map[string]any)
 	limits["max_enumeration_page_records"] = store.ShrimpEnumerationMaxPage
@@ -139,6 +139,9 @@ func send(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 func (h *Handler) problem(w http.ResponseWriter, status int, code, stage string) {
+	if audit, ok := w.(*auditResponse); ok {
+		audit.code, audit.stage = code, stage
+	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": code, "status": status, "code": code, "stage": stage, "operation": nil, "command_id": nil, "commit": "unknown", "recovery": map[string]any{"action": "inspect_or_repair", "retry_after_seconds": nil}})
@@ -165,6 +168,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.problem(w, 401, "invalid_dpop_proof", "authentication")
 		return
 	}
+	if r.Method == http.MethodPost && r.URL.Path == h.path+"/mutations" {
+		h.auditedMutation(w, r, claims)
+		return
+	}
+	h.authenticated(w, r, claims)
+}
+
+func (h *Handler) authenticated(w http.ResponseWriter, r *http.Request, claims *accessClaims) {
 	if !hasScope(claims, "shrimp.read") {
 		h.problem(w, 403, "insufficient_scope", "authorization")
 		return
@@ -254,6 +265,14 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 	if err != nil {
 		h.problem(w, 400, "invalid_request", "acceptance")
 		return
+	}
+	if attempt := store.ShrimpAuditFromContext(r.Context()); attempt != nil {
+		operation := body["operation"].(map[string]any)
+		attempt.Window, attempt.Operation = operation["replay_window"].(string), operation["id"].(string)
+		if err := h.driver.(store.ShrimpAuditDriver).IdentifyShrimpAudit(r.Context(), *attempt); err != nil {
+			h.problem(w, 503, "audit_unavailable", "acceptance")
+			return
+		}
 	}
 	commands := body["commands"].([]any)
 	if len(commands) != 1 || len(body["required_capabilities"].([]any)) != 0 || body["reconciliation"] != nil {

@@ -40,7 +40,10 @@ func (d *DB) ConfigureShrimp(ctx context.Context, resource string) error {
 	if previous != resource {
 		return errors.New("pilot database belongs to another resource")
 	}
-	return d.configureShrimpEnumeration(ctx)
+	if err := d.configureShrimpEnumeration(ctx); err != nil {
+		return err
+	}
+	return d.configureShrimpAudit(ctx)
 }
 
 // ShrimpWindow persists the executable window before returning it to a client.
@@ -111,7 +114,17 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 		if oldHash != m.Fingerprint {
 			return nil, errors.New("replay_conflict")
 		}
-		return store.DecodeShrimpResult(oldResult)
+		result, err := store.DecodeShrimpResult(oldResult)
+		if err != nil {
+			return nil, err
+		}
+		if err := journalShrimpOutcome(ctx, tx, m, result, true); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return result, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
@@ -187,6 +200,12 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 	}
 	result.Time = time.Now().Unix()
 	result.RetainedUntil = max(closes, result.Time) + 86400
+	if attempt := store.ShrimpAuditFromContext(ctx); attempt != nil {
+		result.AuditAttempt = attempt.AttemptID
+	}
+	if err := journalShrimpOutcome(ctx, tx, m, result, false); err != nil {
+		return nil, err
+	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		return nil, err
@@ -315,7 +334,7 @@ func trackShrimpNativeUpdate(ctx context.Context, tx *sql.Tx, update *store.Upda
 	// These facts are owned by the enrolled provisioning authority. Native
 	// password/profile edits remain available and advance the same revision.
 	if update.RowStatus != nil || update.Nickname != nil {
-		return errors.New("managed lifecycle and display name require SHRIMP authority")
+		return store.ErrShrimpManagedWrite
 	}
 	s, err := readShrimpSubject(ctx, tx, id)
 	if err != nil {
@@ -339,7 +358,7 @@ func trackShrimpNativeDelete(ctx context.Context, tx *sql.Tx, userID int32) erro
 		return err
 	}
 	if state != "retired" {
-		return errors.New("retire the managed account before native deletion")
+		return store.ErrShrimpManagedWrite
 	}
 	return nil
 }

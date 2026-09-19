@@ -328,7 +328,7 @@ func (s *APIV1Service) CreateUser(ctx context.Context, request *v1pb.CreateUserR
 	return convertUserFromStore(user, user), nil
 }
 
-func (s *APIV1Service) UpdateUser(ctx context.Context, request *v1pb.UpdateUserRequest) (*v1pb.User, error) {
+func (s *APIV1Service) updateUser(ctx context.Context, request *v1pb.UpdateUserRequest) (*v1pb.User, error) {
 	if request.User == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "user is required")
 	}
@@ -357,6 +357,9 @@ func (s *APIV1Service) UpdateUser(ctx context.Context, request *v1pb.UpdateUserR
 	// Only allow admin or self to update user.
 	if currentUser.ID != userID && currentUser.Role != store.RoleAdmin {
 		return nil, status.Errorf(codes.PermissionDenied, "permission denied")
+	}
+	if err := s.Store.IdentifyShrimpNativeAudit(ctx, userID); err != nil {
+		return nil, status.Error(codes.Unavailable, "audit storage unavailable")
 	}
 
 	currentTsSec := time.Now().Unix()
@@ -467,7 +470,7 @@ func (s *APIV1Service) UpdateUser(ctx context.Context, request *v1pb.UpdateUserR
 	return convertUserFromStore(updatedUser, currentUser), nil
 }
 
-func (s *APIV1Service) DeleteUser(ctx context.Context, request *v1pb.DeleteUserRequest) (*emptypb.Empty, error) {
+func (s *APIV1Service) deleteUser(ctx context.Context, request *v1pb.DeleteUserRequest) (*emptypb.Empty, error) {
 	user, err := ResolveUserByName(ctx, s.Store, request.Name)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid user name: %v", err)
@@ -486,12 +489,18 @@ func (s *APIV1Service) DeleteUser(ctx context.Context, request *v1pb.DeleteUserR
 	if currentUser.ID != userID && currentUser.Role != store.RoleAdmin {
 		return nil, status.Errorf(codes.PermissionDenied, "permission denied")
 	}
+	if err := s.Store.IdentifyShrimpNativeAudit(ctx, userID); err != nil {
+		return nil, status.Error(codes.Unavailable, "audit storage unavailable")
+	}
 	isSelfDelete := currentUser.ID == userID
 
 	deleteResult, err := s.Store.DeleteUser(ctx, &store.DeleteUser{
 		ID: user.ID,
 	})
 	if err != nil {
+		if stderrors.Is(err, store.ErrShrimpManagedWrite) {
+			return nil, status.Error(codes.FailedPrecondition, err.Error())
+		}
 		if stderrors.Is(err, store.ErrUserHasSpaceMembership) {
 			return nil, status.Error(codes.FailedPrecondition, "leave all spaces before deleting this account")
 		}
@@ -515,6 +524,8 @@ const emailTakenMessage = "email is already in use"
 // AlreadyExists and everything else onto Internal with the given context.
 func convertUserWriteError(err error, context string) error {
 	switch {
+	case stderrors.Is(err, store.ErrShrimpManagedWrite):
+		return status.Error(codes.FailedPrecondition, err.Error())
 	case stderrors.Is(err, store.ErrEmailTaken):
 		return status.Error(codes.AlreadyExists, emailTakenMessage)
 	case stderrors.Is(err, store.ErrUsernameTaken):

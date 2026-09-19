@@ -31,6 +31,17 @@ func (d *DB) DeleteUser(ctx context.Context, delete *store.DeleteUser) (*store.D
 	}()
 	var userID int32
 	if err := tx.QueryRowContext(ctx, "SELECT id FROM user WHERE id = ?", delete.ID).Scan(&userID); errors.Is(err, sql.ErrNoRows) {
+		if attempt := store.ShrimpAuditFromContext(ctx); attempt != nil {
+			event := *attempt
+			event.Kind, event.Stage, event.Commit, event.Code = "outcome", "native_database", "not_committed", "already_absent"
+			event.NativeUserID = delete.ID
+			if err := appendShrimpAudit(ctx, tx, event); err != nil {
+				return nil, err
+			}
+			if err := tx.Commit(); err != nil {
+				return nil, err
+			}
+		}
 		return &store.DeleteUserResult{}, nil
 	} else if err != nil {
 		return nil, errors.Wrap(err, "failed to read user")
@@ -63,6 +74,9 @@ func (d *DB) DeleteUser(ctx context.Context, delete *store.DeleteUser) (*store.D
 		return nil, errors.New("delete user failpoint before commit")
 	}
 
+	if err := journalShrimpNative(ctx, tx, delete.ID); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, errors.Wrap(err, "failed to commit delete user transaction")
 	}
