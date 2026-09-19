@@ -21,6 +21,9 @@ var ErrShrimpProofReplay = errors.New("proof already consumed")
 // ErrShrimpProofStorage identifies unavailable replay protection, not bad credentials.
 var ErrShrimpProofStorage = errors.New("proof replay storage unavailable")
 
+// ErrShrimpWindowQuota means the principal already holds its maximum open windows.
+var ErrShrimpWindowQuota = errors.New("replay_window_quota")
+
 // ShrimpSubject is the persistent pilot identity, separate from a Memos username.
 type ShrimpSubject struct {
 	ID, SourceID, SourceRevision, SourceReference, Revision, Lifecycle, DisplayName string

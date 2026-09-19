@@ -62,7 +62,7 @@ func (d *DB) ShrimpWindow(ctx context.Context, principal string) (string, int64,
 		return "", 0, err
 	}
 	if count >= 128 {
-		return "", 0, errors.New("replay_window_quota")
+		return "", 0, store.ErrShrimpWindowQuota
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO shrimp_window(id,principal,closes_at) VALUES(?,?,?)", id, principal, closes); err != nil {
 		return "", 0, err

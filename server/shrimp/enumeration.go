@@ -98,7 +98,7 @@ func (h *Handler) enumerationFits(view any, limit int) func(*store.ShrimpEnumera
 func (h *Handler) enumerate(w http.ResponseWriter, r *http.Request, claims *accessClaims) {
 	body, err := h.body(r, "enumeration")
 	if err != nil {
-		h.problem(w, 400, "invalid_request", "read")
+		h.bodyProblem(w, err, "read")
 		return
 	}
 	if profiles, ok := body["required_profiles"].([]any); ok && len(profiles) > 0 {
@@ -144,7 +144,8 @@ func (h *Handler) enumerate(w http.ResponseWriter, r *http.Request, claims *acce
 			}
 		}
 		if status == 429 {
-			w.Header().Set("Retry-After", "1")
+			h.throttled(w, "read")
+			return
 		}
 		h.problem(w, status, code, "read")
 		return

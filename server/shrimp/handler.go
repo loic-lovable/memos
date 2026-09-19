@@ -140,6 +140,10 @@ func send(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 func (h *Handler) problem(w http.ResponseWriter, status int, code, stage string) {
+	if code == "limit_exceeded" {
+		h.problemRecovery(w, status, code, stage, "correct_new_work_or_recover", 0)
+		return
+	}
 	h.problemRecovery(w, status, code, stage, "inspect_or_repair", 0)
 }
 
@@ -223,7 +227,11 @@ func (h *Handler) authenticated(w http.ResponseWriter, r *http.Request, claims *
 		}
 		id, closes, err := h.driver.ShrimpWindow(r.Context(), claims.Subject)
 		if err != nil {
-			h.problem(w, 503, "storage_unavailable", "acceptance")
+			if errors.Is(err, store.ErrShrimpWindowQuota) {
+				h.throttled(w, "acceptance")
+			} else {
+				h.problemRecovery(w, 503, "storage_unavailable", "acceptance", "retry_with_fresh_proof", 1)
+			}
 			return
 		}
 		send(w, 200, map[string]any{"schema_version": "0.2", "scope": h.scope(), "replay_window": id, "server_time": stamp(time.Now().Unix()), "closes_at": stamp(closes), "results_retained_until": stamp(closes + 86400), "min_result_retention_seconds": 86400})
@@ -254,10 +262,17 @@ func (h *Handler) authenticated(w http.ResponseWriter, r *http.Request, claims *
 	}
 }
 
+const maxRequestBytes = 65536
+
+var errRequestTooLarge = errors.New("request byte limit exceeded")
+
 func (h *Handler) body(r *http.Request, schema string) (map[string]any, error) {
-	b, err := io.ReadAll(io.LimitReader(r.Body, 65537))
-	if err != nil || len(b) > 65536 {
-		return nil, errors.New("request limit")
+	b, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBytes+1))
+	if len(b) > maxRequestBytes {
+		return nil, errRequestTooLarge
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "read request body")
 	}
 	var body map[string]any
 	if err := strictJSON(b, &body); err != nil {
@@ -272,7 +287,7 @@ func (h *Handler) body(r *http.Request, schema string) (map[string]any, error) {
 func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessClaims) {
 	body, err := h.body(r, "mutation")
 	if err != nil {
-		h.problem(w, 400, "invalid_request", "acceptance")
+		h.bodyProblem(w, err, "acceptance")
 		return
 	}
 	if attempt := store.ShrimpAuditFromContext(r.Context()); attempt != nil {
@@ -284,7 +299,11 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		}
 	}
 	commands := body["commands"].([]any)
-	if len(commands) != 1 || len(body["required_capabilities"].([]any)) != 0 || body["reconciliation"] != nil {
+	if len(commands) != 1 {
+		h.problem(w, 400, "limit_exceeded", "acceptance")
+		return
+	}
+	if len(body["required_capabilities"].([]any)) != 0 || body["reconciliation"] != nil {
 		h.problem(w, 400, "unsupported_operation", "acceptance")
 		return
 	}
@@ -309,7 +328,7 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		m.Dependencies = append(m.Dependencies, token.(string))
 	}
 	if len(m.Dependencies) > 16 {
-		h.problem(w, 400, "too_many_dependencies", "acceptance")
+		h.problem(w, 400, "limit_exceeded", "acceptance")
 		return
 	}
 	switch m.Action {
@@ -412,7 +431,7 @@ func (h *Handler) writeReceipt(w http.ResponseWriter, window, id string, result 
 func (h *Handler) read(w http.ResponseWriter, r *http.Request) {
 	body, err := h.body(r, "read")
 	if err != nil {
-		h.problem(w, 400, "invalid_request", "read")
+		h.bodyProblem(w, err, "read")
 		return
 	}
 	if profiles, ok := body["required_profiles"].([]any); ok && len(profiles) > 0 {
@@ -435,7 +454,7 @@ func (h *Handler) read(w http.ResponseWriter, r *http.Request) {
 		deps = append(deps, v.(string))
 	}
 	if len(deps) > 16 {
-		h.problem(w, 400, "too_many_dependencies", "read")
+		h.problem(w, 400, "limit_exceeded", "read")
 		return
 	}
 	id := resource["id"].(string)
@@ -465,4 +484,23 @@ func (h *Handler) read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	send(w, 200, response)
+}
+
+// bodyProblem keeps untrusted or undecodable operation identities out of errors.
+// Refusing this attempt says nothing about a previous attempt's durable outcome.
+func (h *Handler) bodyProblem(w http.ResponseWriter, err error, stage string) {
+	switch {
+	case errors.Is(err, errRequestTooLarge):
+		h.problem(w, http.StatusRequestEntityTooLarge, "limit_exceeded", stage)
+	case errors.Is(err, errJSONDepth):
+		h.problem(w, http.StatusBadRequest, "limit_exceeded", stage)
+	default:
+		h.problemRecovery(w, http.StatusBadRequest, "invalid_request", stage, "correct_new_work_or_recover", 0)
+	}
+}
+
+func (h *Handler) throttled(w http.ResponseWriter, stage string) {
+	// Scope is the principal-within-resource boundary advertised in discovery.
+	// Retrying preserves the original body, deadline, window and cursor.
+	h.problemRecovery(w, http.StatusTooManyRequests, "throttled", stage, "retry_with_fresh_proof", 1)
 }

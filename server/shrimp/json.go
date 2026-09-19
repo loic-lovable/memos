@@ -8,6 +8,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var errJSONDepth = errors.New("JSON nesting limit")
+
 // strictJSON rejects ambiguous duplicate members before typed decoding, including
 // nested members. A duplicate cannot change authority or logical retry equality.
 func strictJSON(data []byte, target any) error {
@@ -15,7 +17,7 @@ func strictJSON(data []byte, target any) error {
 	var value func(int) error
 	value = func(depth int) error {
 		if depth > 16 {
-			return errors.New("JSON nesting limit")
+			return errJSONDepth
 		}
 		token, err := decoder.Token()
 		if err != nil {
