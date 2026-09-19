@@ -116,6 +116,130 @@ func TestApplyShrimpCompetingRevisionsAndNativeOwnership(t *testing.T) {
 	require.NoError(t, err, "refused native deletion must preserve account")
 }
 
+func TestShrimpDisableAlreadyDisabledAndReplayAfterRestore(t *testing.T) {
+	s, d := pilotStore(t)
+	ctx := t.Context()
+	created, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "create_subject", nil))
+	require.NoError(t, err)
+	require.Empty(t, created.Error)
+	intent := pilotIntent(t, d, "disable", &created.Subject)
+	disabled, err := s.ApplyShrimp(ctx, intent)
+	require.NoError(t, err)
+	require.Empty(t, disabled.Error)
+	want := created.Subject
+	want.Revision = disabled.Subject.Revision
+	require.Equal(t, want, disabled.Subject, "disable preserves identity, source and attributes")
+	require.NotEqual(t, created.Subject.Revision, disabled.Subject.Revision)
+	_, err = s.AdmissionTicket(ctx, disabled.Subject.UserID)
+	require.ErrorIs(t, err, store.ErrAdmissionDenied)
+
+	stale, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "activate", &created.Subject))
+	require.NoError(t, err)
+	require.Equal(t, "mutation_rejected", stale.Error)
+	active, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "activate", &disabled.Subject))
+	require.NoError(t, err)
+	require.Empty(t, active.Error)
+	again, err := s.ApplyShrimp(ctx, intent)
+	require.NoError(t, err)
+	require.Equal(t, disabled, again, "retry must recover the original result without disabling again")
+	current, frontier, err := d.ReadShrimp(ctx, active.Subject.ID, nil)
+	require.NoError(t, err)
+	require.Equal(t, active.Subject, *current)
+	require.Equal(t, active.Token, frontier, "retry must not append an event")
+	_, err = s.AdmissionTicket(ctx, current.UserID)
+	require.NoError(t, err)
+}
+
+func TestShrimpRetirementFencesAdmissionAndIsTerminal(t *testing.T) {
+	for _, lifecycle := range []string{"active", "disabled"} {
+		t.Run(lifecycle, func(t *testing.T) {
+			s, d := pilotStore(t)
+			ctx := t.Context()
+			created, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "create_subject", nil))
+			require.NoError(t, err)
+			active, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "activate", &created.Subject))
+			require.NoError(t, err)
+			require.Empty(t, active.Error)
+			ticket, err := s.AdmissionTicket(ctx, active.Subject.UserID)
+			require.NoError(t, err)
+			before := active
+			if lifecycle == "disabled" {
+				before, err = s.ApplyShrimp(ctx, pilotIntent(t, d, "disable", &active.Subject))
+				require.NoError(t, err)
+				require.Empty(t, before.Error)
+			}
+			intent := pilotIntent(t, d, "retire", &before.Subject)
+			stale := intent
+			stale.ID, stale.Fingerprint, stale.ExpectedRevision = random.UUID(), random.UUID(), created.Subject.Revision
+			refused, err := s.ApplyShrimp(ctx, stale)
+			require.NoError(t, err)
+			require.Equal(t, "mutation_rejected", refused.Error)
+			retired, err := s.ApplyShrimp(ctx, intent)
+			require.NoError(t, err)
+			require.Empty(t, retired.Error)
+			want := before.Subject
+			want.Lifecycle, want.Revision = "retired", retired.Subject.Revision
+			require.Equal(t, want, retired.Subject)
+			require.NotEqual(t, before.Subject.Revision, retired.Subject.Revision)
+			users, err := d.ListUsers(ctx, &store.FindUser{ID: &retired.Subject.UserID})
+			require.NoError(t, err)
+			require.Len(t, users, 1)
+			require.Equal(t, store.Archived, users[0].RowStatus)
+			publication, release := store.WithAdmissionScope(ctx)
+			defer release()
+			require.ErrorIs(t, s.PublishAdmission(publication, retired.Subject.UserID, ticket, func(*store.User) error {
+				t.Fatal("pre-retirement attempt published credentials")
+				return nil
+			}), store.ErrAdmissionDenied)
+			_, err = s.AdmissionTicket(ctx, retired.Subject.UserID)
+			require.ErrorIs(t, err, store.ErrAdmissionDenied)
+			for _, action := range []string{"activate", "disable", "retire", "update_subject"} {
+				result, err := s.ApplyShrimp(ctx, pilotIntent(t, d, action, &retired.Subject))
+				require.NoError(t, err)
+				require.Equal(t, "mutation_rejected", result.Error, action)
+			}
+			again, err := s.ApplyShrimp(ctx, intent)
+			require.NoError(t, err)
+			require.Equal(t, retired, again)
+			current, frontier, err := d.ReadShrimp(ctx, retired.Subject.ID, nil)
+			require.NoError(t, err)
+			require.Equal(t, retired.Subject, *current)
+			require.Equal(t, retired.Token, frontier)
+		})
+	}
+}
+
+func TestShrimpActiveRetirementPreservesLastSpaceAdmin(t *testing.T) {
+	s, d := pilotStore(t)
+	ctx := t.Context()
+	created, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "create_subject", nil))
+	require.NoError(t, err)
+	active, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "activate", &created.Subject))
+	require.NoError(t, err)
+	require.Empty(t, active.Error)
+	space, err := s.CreateSpace(ctx, &store.Space{UID: "pilot-space", Title: "Pilot space"}, active.Subject.UserID)
+	require.NoError(t, err)
+	intent := pilotIntent(t, d, "retire", &active.Subject)
+	refused, err := s.ApplyShrimp(ctx, intent)
+	require.NoError(t, err)
+	require.Equal(t, "mutation_rejected", refused.Error)
+	current, frontier, err := d.ReadShrimp(ctx, active.Subject.ID, nil)
+	require.NoError(t, err)
+	require.Equal(t, active.Subject, *current, "native guard must roll back retirement and revision")
+	require.Equal(t, active.Token, frontier)
+	_, err = s.AdmissionTicket(ctx, current.UserID)
+	require.NoError(t, err, "rejected retirement must leave native admission intact")
+	_, err = s.DeleteSpace(ctx, &store.DeleteSpace{ID: space.ID, ActorUserID: current.UserID})
+	require.NoError(t, err)
+	again, err := s.ApplyShrimp(ctx, intent)
+	require.NoError(t, err)
+	require.Equal(t, refused, again, "changed circumstances must not re-evaluate a retained rejection")
+	retired, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "retire", current))
+	require.NoError(t, err)
+	require.Empty(t, retired.Error)
+	require.Equal(t, "retired", retired.Subject.Lifecycle)
+}
+
 func TestShrimpAdmissionSurvivesStaleCacheAndRestore(t *testing.T) {
 	s, d := pilotStore(t)
 	ctx := t.Context()

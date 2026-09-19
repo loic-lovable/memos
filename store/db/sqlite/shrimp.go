@@ -235,14 +235,14 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 		state := store.Normal
 		update.RowStatus = &state
 	case "disable":
-		if s.Lifecycle != "active" {
+		if s.Lifecycle != "active" && s.Lifecycle != "disabled" {
 			return nil, errShrimpConflict
 		}
 		s.Lifecycle = "disabled"
 		state := store.Archived
 		update.RowStatus = &state
 	case "retire":
-		if s.Lifecycle != "disabled" {
+		if s.Lifecycle != "active" && s.Lifecycle != "disabled" {
 			return nil, errShrimpConflict
 		}
 		s.Lifecycle = "retired"
