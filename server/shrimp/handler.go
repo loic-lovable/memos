@@ -200,7 +200,17 @@ func (h *Handler) authenticated(w http.ResponseWriter, r *http.Request, claims *
 	}
 	version, err := oneHeader(r, versionName)
 	if err != nil || version != "0.2" {
-		h.problem(w, 400, "version_mismatch", "negotiation")
+		code := "unsupported_version"
+		switch {
+		case len(r.Header.Values(versionName)) == 0:
+			code = "version_required"
+		case err != nil || version == "" || strings.Contains(version, ","):
+			code = "invalid_request"
+		}
+		if versionName == "SHRIMP-Discovery-Version" && code != "invalid_request" {
+			code = "unsupported_discovery_version"
+		}
+		h.problem(w, 400, code, "negotiation")
 		return
 	}
 	w.Header().Set(versionName, "0.2")

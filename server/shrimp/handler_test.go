@@ -17,6 +17,57 @@ import (
 	"github.com/usememos/memos/store"
 )
 
+func TestVersionNegotiationErrorsDoNotSelectAContract(t *testing.T) {
+	for _, route := range []struct {
+		name, path, header, missing, unsupported string
+	}{
+		{"schema", "/schemas/receipt", "SHRIMP-Version", "version_required", "unsupported_version"},
+		{"discovery", "/capabilities", "SHRIMP-Discovery-Version", "unsupported_discovery_version", "unsupported_discovery_version"},
+	} {
+		t.Run(route.name, func(t *testing.T) {
+			for _, tc := range []struct {
+				name   string
+				values []string
+				code   string
+			}{
+				{"supported", []string{"0.2"}, ""},
+				{"missing", nil, route.missing},
+				{"unknown", []string{"future-version"}, route.unsupported},
+				{"legacy", []string{"0.1"}, route.unsupported},
+				{"duplicate", []string{"0.2", "0.2"}, "invalid_request"},
+				{"list", []string{"0.2, 0.2"}, "invalid_request"},
+				{"empty", []string{""}, "invalid_request"},
+				{"oversized", []string{strings.Repeat("x", 16385)}, "invalid_request"},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					h := &Handler{path: "/shrimp", schemas: map[string]json.RawMessage{"receipt": json.RawMessage(`{}`)}}
+					r := httptest.NewRequest(http.MethodGet, "/shrimp"+route.path, nil)
+					for _, value := range tc.values {
+						r.Header.Add(route.header, value)
+					}
+					w := httptest.NewRecorder()
+					h.authenticated(w, r, &accessClaims{Scope: "shrimp.read"})
+					if tc.code == "" {
+						require.Equal(t, http.StatusOK, w.Code)
+						require.Equal(t, "0.2", w.Header().Get(route.header))
+						return
+					}
+					require.Equal(t, http.StatusBadRequest, w.Code)
+					require.Empty(t, w.Header().Get("SHRIMP-Version"))
+					require.Empty(t, w.Header().Get("SHRIMP-Discovery-Version"))
+					var problem map[string]any
+					require.NoError(t, json.Unmarshal(w.Body.Bytes(), &problem))
+					require.Equal(t, tc.code, problem["code"])
+					require.Equal(t, "negotiation", problem["stage"])
+					require.Equal(t, "unknown", problem["commit"])
+					require.Nil(t, problem["operation"])
+					require.Nil(t, problem["command_id"])
+				})
+			}
+		})
+	}
+}
+
 func objectSchema(t *testing.T) *jsonschema.Resolved {
 	t.Helper()
 	schema, err := (&jsonschema.Schema{Type: "object"}).Resolve(nil)
