@@ -24,6 +24,20 @@ func (d *DB) UpdateUser(ctx context.Context, update *store.UpdateUser) (*store.U
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	user, err := updateUserTx(ctx, tx, update)
+	if err != nil {
+		return nil, err
+	}
+	if err := trackShrimpNativeUpdate(ctx, tx, update); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func updateUserTx(ctx context.Context, tx *sql.Tx, update *store.UpdateUser) (*store.User, error) {
 	if update.RowStatus != nil && *update.RowStatus == store.Archived {
 		if err := validateSQLiteUserArchive(ctx, tx, update.ID); err != nil {
 			return nil, err
@@ -83,9 +97,6 @@ func (d *DB) UpdateUser(ctx context.Context, update *store.UpdateUser) (*store.U
 		return nil, err
 	}
 	user.Email = email.String
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
 	return user, nil
 }
 

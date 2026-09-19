@@ -15,6 +15,7 @@ import (
 	v1pb "github.com/usememos/memos/proto/gen/api/v1"
 	storepb "github.com/usememos/memos/proto/gen/store"
 	"github.com/usememos/memos/server/auth"
+	"github.com/usememos/memos/store"
 )
 
 func (s *APIV1Service) ListPersonalAccessTokens(ctx context.Context, request *v1pb.ListPersonalAccessTokensRequest) (*v1pb.ListPersonalAccessTokensResponse, error) {
@@ -74,12 +75,35 @@ func (s *APIV1Service) CreatePersonalAccessToken(ctx context.Context, request *v
 		return nil, status.Errorf(codes.InvalidArgument, "invalid user name: %v", err)
 	}
 	userID := user.ID
+	ticket, err := s.Store.AdmissionTicket(ctx, userID)
+	if err != nil {
+		return nil, credentialPublicationError(err)
+	}
 
 	// Verify permission
 	if _, err := s.authorizeUserResourceAccess(ctx, userID, false); err != nil {
 		return nil, err
 	}
 
+	if s.BeforeCredentialPublication != nil {
+		if err := s.BeforeCredentialPublication(ctx, userID, "pat"); err != nil {
+			return nil, err
+		}
+	}
+	var response *v1pb.CreatePersonalAccessTokenResponse
+	err = s.Store.PublishAdmission(ctx, userID, ticket, func(current *store.User) error {
+		var err error
+		response, err = s.issuePersonalAccessToken(ctx, current, request)
+		return err
+	})
+	if err != nil {
+		return nil, credentialPublicationError(err)
+	}
+	return response, nil
+}
+
+func (s *APIV1Service) issuePersonalAccessToken(ctx context.Context, user *store.User, request *v1pb.CreatePersonalAccessTokenRequest) (*v1pb.CreatePersonalAccessTokenResponse, error) {
+	userID := user.ID
 	// Generate PAT
 	tokenID := random.UUID()
 	token := auth.GeneratePersonalAccessToken()

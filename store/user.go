@@ -157,6 +157,8 @@ func (s *Store) CreateUserIfNoUsers(ctx context.Context, create *User) (*User, b
 }
 
 func (s *Store) UpdateUser(ctx context.Context, update *UpdateUser) (*User, error) {
+	s.admissionMu.Lock()
+	defer s.admissionMu.Unlock()
 	if update.Email != nil {
 		email, err := normalizeUserEmail(*update.Email)
 		if err != nil {
@@ -224,6 +226,8 @@ func (s *Store) GetUser(ctx context.Context, find *FindUser) (*User, error) {
 // DeleteUser removes a user and returns cache invalidation state. Deleting an
 // already-missing user is idempotent and returns an empty result.
 func (s *Store) DeleteUser(ctx context.Context, delete *DeleteUser) (*DeleteUserResult, error) {
+	s.admissionMu.Lock()
+	defer s.admissionMu.Unlock()
 	result, err := s.driver.DeleteUser(ctx, delete)
 	if err != nil {
 		return nil, err

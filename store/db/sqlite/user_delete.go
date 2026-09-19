@@ -55,6 +55,10 @@ func (d *DB) DeleteUser(ctx context.Context, delete *store.DeleteUser) (*store.D
 		return nil, errors.Wrap(err, "failed to delete user targets")
 	}
 
+	if err := trackShrimpNativeDelete(ctx, tx, delete.ID); err != nil {
+		return nil, err
+	}
+
 	if store.GetDeleteUserFailpoint(ctx) == store.DeleteUserFailpointBeforeCommit {
 		return nil, errors.New("delete user failpoint before commit")
 	}

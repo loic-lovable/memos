@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,7 +23,26 @@ import (
 	"github.com/usememos/memos/store"
 )
 
-func (s *APIV1Service) doSignIn(ctx context.Context, user *store.User) (string, time.Time, error) {
+func (s *APIV1Service) doSignIn(ctx context.Context, user *store.User, ticket string) (string, time.Time, error) {
+	if s.BeforeCredentialPublication != nil {
+		if err := s.BeforeCredentialPublication(ctx, user.ID, "session"); err != nil {
+			return "", time.Time{}, err
+		}
+	}
+	var token string
+	var expiry time.Time
+	err := s.Store.PublishAdmission(ctx, user.ID, ticket, func(current *store.User) error {
+		var err error
+		token, expiry, err = s.issueSignIn(ctx, current)
+		return err
+	})
+	if err != nil {
+		return "", time.Time{}, credentialPublicationError(err)
+	}
+	return token, expiry, nil
+}
+
+func (s *APIV1Service) issueSignIn(ctx context.Context, user *store.User) (string, time.Time, error) {
 	// Generate refresh token
 	tokenID := random.UUID()
 	refreshToken, refreshExpiresAt, err := auth.GenerateRefreshToken(user.ID, tokenID, []byte(s.Secret))
@@ -39,7 +59,7 @@ func (s *APIV1Service) doSignIn(ctx context.Context, user *store.User) (string, 
 		ClientInfo: clientInfo,
 	}
 	if err := s.Store.AddUserRefreshToken(ctx, user.ID, refreshTokenRecord); err != nil {
-		slog.Error("failed to store refresh token", "error", err)
+		return "", time.Time{}, status.Errorf(codes.Internal, "failed to store refresh token: %v", err)
 	}
 
 	// Set refresh token cookie
@@ -124,6 +144,18 @@ func (s *APIV1Service) RefreshToken(ctx context.Context, _ *v1pb.RefreshTokenReq
 		return nil, status.Errorf(codes.Unauthenticated, "refresh token not found")
 	}
 
+	claims, err := auth.ParseRefreshToken(refreshToken, []byte(s.Secret))
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
+	}
+	userID, err := strconv.ParseInt(claims.Subject, 10, 32)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "invalid refresh subject")
+	}
+	ticket, err := s.Store.AdmissionTicket(ctx, int32(userID))
+	if err != nil {
+		return nil, credentialPublicationError(err)
+	}
 	// Validate refresh token and get old token ID for rotation
 	authenticator := auth.NewAuthenticator(s.Store, s.Secret)
 	user, oldTokenID, err := authenticator.AuthenticateByRefreshToken(ctx, refreshToken)
@@ -131,6 +163,24 @@ func (s *APIV1Service) RefreshToken(ctx context.Context, _ *v1pb.RefreshTokenReq
 		return nil, status.Errorf(codes.Unauthenticated, "invalid refresh token: %v", err)
 	}
 
+	if s.BeforeCredentialPublication != nil {
+		if err := s.BeforeCredentialPublication(ctx, user.ID, "refresh"); err != nil {
+			return nil, err
+		}
+	}
+	var response *v1pb.RefreshTokenResponse
+	err = s.Store.PublishAdmission(ctx, user.ID, ticket, func(current *store.User) error {
+		var err error
+		response, err = s.rotateRefreshToken(ctx, current, oldTokenID)
+		return err
+	})
+	if err != nil {
+		return nil, credentialPublicationError(err)
+	}
+	return response, nil
+}
+
+func (s *APIV1Service) rotateRefreshToken(ctx context.Context, user *store.User, oldTokenID string) (*v1pb.RefreshTokenResponse, error) {
 	// --- Refresh Token Rotation ---
 	// Generate new refresh token with fresh 30-day expiry (sliding window)
 	newTokenID := random.UUID()
@@ -478,4 +528,11 @@ func (*APIV1Service) parseUserAgent(userAgent string, clientInfo *storepb.Refres
 	} else if strings.Contains(userAgent, "opera/") || strings.Contains(userAgent, "opr/") {
 		clientInfo.Browser = "Opera"
 	}
+}
+
+func credentialPublicationError(err error) error {
+	if errors.Is(err, store.ErrAdmissionDenied) {
+		return status.Error(codes.PermissionDenied, "account admission fenced")
+	}
+	return status.Error(codes.Internal, "credential publication failed")
 }

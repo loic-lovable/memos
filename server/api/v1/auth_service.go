@@ -52,6 +52,7 @@ func (s *APIV1Service) GetCurrentUser(ctx context.Context, _ *v1pb.GetCurrentUse
 // Returns: User info, access token, and token expiry.
 func (s *APIV1Service) SignIn(ctx context.Context, request *v1pb.SignInRequest) (*v1pb.SignInResponse, error) {
 	var existingUser *store.User
+	var admissionTicket string
 
 	// Rate limits run before any lookup or hashing so a flood costs nothing.
 	// Each attempt reserves its units up front, so concurrent attempts cannot
@@ -70,9 +71,7 @@ func (s *APIV1Service) SignIn(ctx context.Context, request *v1pb.SignInRequest) 
 			attempt.succeeded()
 			return nil, err
 		}
-		user, err := s.Store.GetUser(ctx, &store.FindUser{
-			Username: &passwordCredentials.Username,
-		})
+		user, ticket, err := s.Store.PasswordAdmission(ctx, passwordCredentials.Username)
 		if err != nil {
 			attempt.succeeded()
 			return nil, status.Errorf(codes.Internal, "failed to get user, error: %v", err)
@@ -80,6 +79,7 @@ func (s *APIV1Service) SignIn(ctx context.Context, request *v1pb.SignInRequest) 
 		if user == nil {
 			return nil, status.Errorf(codes.InvalidArgument, unmatchedUsernameAndPasswordError)
 		}
+		admissionTicket = ticket
 		// Compare the stored hashed password, with the hashed version of the password that was received.
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(passwordCredentials.Password)); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, unmatchedUsernameAndPasswordError)
@@ -109,6 +109,10 @@ func (s *APIV1Service) SignIn(ctx context.Context, request *v1pb.SignInRequest) 
 			return nil, err
 		}
 		existingUser = user
+		admissionTicket, err = s.Store.AdmissionTicket(ctx, user.ID)
+		if err != nil {
+			return nil, credentialPublicationError(err)
+		}
 	}
 
 	if existingUser == nil {
@@ -122,9 +126,9 @@ func (s *APIV1Service) SignIn(ctx context.Context, request *v1pb.SignInRequest) 
 		return nil, status.Errorf(codes.PermissionDenied, "user has been archived with username %s", existingUser.Username)
 	}
 
-	accessToken, accessExpiresAt, err := s.doSignIn(ctx, existingUser)
+	accessToken, accessExpiresAt, err := s.doSignIn(ctx, existingUser, admissionTicket)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to sign in: %v", err)
+		return nil, err
 	}
 
 	return &v1pb.SignInResponse{

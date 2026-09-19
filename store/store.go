@@ -15,6 +15,8 @@ type Store struct {
 	profile *profile.Profile
 	driver  Driver
 
+	admissionMu    sync.RWMutex
+	shrimpPilot    bool
 	userCreateMu   sync.Mutex
 	authConfigMu   sync.Mutex
 	refreshTokenMu sync.Mutex

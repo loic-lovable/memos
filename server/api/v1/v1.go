@@ -65,6 +65,9 @@ type APIV1Service struct {
 	v1pb.UnimplementedAIServiceServer
 	v1pb.UnimplementedIdentityProviderServiceServer
 
+	// BeforeCredentialPublication is an optional isolated-deployment test barrier.
+	BeforeCredentialPublication func(context.Context, int32, string) error
+
 	Secret                  string
 	Profile                 *profile.Profile
 	Store                   *store.Store
