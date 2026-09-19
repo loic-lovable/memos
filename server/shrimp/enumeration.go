@@ -105,7 +105,7 @@ func (h *Handler) enumerate(w http.ResponseWriter, r *http.Request, claims *acce
 		h.problem(w, 400, "unsupported_profile", "read")
 		return
 	}
-	if body["wait_ms"] != float64(0) || len(body["required_dependencies"].([]any)) > 16 || body["page_size"].(float64) > store.ShrimpEnumerationMaxPage {
+	if body["wait_ms"] != float64(0) {
 		h.problem(w, 400, "limit_exceeded", "read")
 		return
 	}

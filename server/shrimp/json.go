@@ -16,14 +16,15 @@ func strictJSON(data []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	var value func(int) error
 	value = func(depth int) error {
-		if depth > 16 {
-			return errJSONDepth
-		}
 		token, err := decoder.Token()
 		if err != nil {
 			return err
 		}
 		if delimiter, ok := token.(json.Delim); ok {
+			// Count containers from one; empty containers consume depth too.
+			if depth >= 16 {
+				return errJSONDepth
+			}
 			switch delimiter {
 			case '{':
 				seen := map[string]bool{}

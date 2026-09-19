@@ -16,22 +16,28 @@ func TestStrictJSONRejectsAmbiguousIntent(t *testing.T) {
 }
 
 func TestStrictJSONDepthBoundary(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		depth int
-		want  error
+	for _, shape := range []struct {
+		name, prefix, middle, suffix string
 	}{
-		{"exact", 16, nil},
-		{"above", 17, errJSONDepth},
+		{"arrays_scalar", "[", "0", "]"},
+		{"arrays_empty", "[", "", "]"},
+		{"objects_scalar", `{"x":`, "0", "}"},
+		{"objects_empty", `{"x":`, "{}", "}"},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			input := strings.Repeat("[", tc.depth) + "0" + strings.Repeat("]", tc.depth)
-			var value any
-			err := strictJSON([]byte(input), &value)
-			if tc.want == nil {
-				require.NoError(t, err)
-			} else {
-				require.ErrorIs(t, err, tc.want)
+		t.Run(shape.name, func(t *testing.T) {
+			for _, depth := range []int{16, 17} {
+				count := depth
+				if shape.name == "objects_empty" {
+					count-- // The innermost {} is also a container.
+				}
+				input := strings.Repeat(shape.prefix, count) + shape.middle + strings.Repeat(shape.suffix, count)
+				var value any
+				err := strictJSON([]byte(input), &value)
+				if depth == 16 {
+					require.NoError(t, err)
+				} else {
+					require.ErrorIs(t, err, errJSONDepth)
+				}
 			}
 		})
 	}

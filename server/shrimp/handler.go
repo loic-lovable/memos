@@ -265,6 +265,7 @@ func (h *Handler) authenticated(w http.ResponseWriter, r *http.Request, claims *
 const maxRequestBytes = 65536
 
 var errRequestTooLarge = errors.New("request byte limit exceeded")
+var errRequestLimit = errors.New("request shape limit exceeded")
 
 func (h *Handler) body(r *http.Request, schema string) (map[string]any, error) {
 	b, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBytes+1))
@@ -277,6 +278,17 @@ func (h *Handler) body(r *http.Request, schema string) (map[string]any, error) {
 	var body map[string]any
 	if err := strictJSON(b, &body); err != nil {
 		return nil, err
+	}
+	// Check advertised cardinality limits before the schema's broader safety
+	// envelope, so larger requests retain the same machine-readable category.
+	if commands, ok := body["commands"].([]any); schema == "mutation" && ok && len(commands) > 1 {
+		return nil, errRequestLimit
+	}
+	if dependencies, ok := body["required_dependencies"].([]any); ok && len(dependencies) > 16 {
+		return nil, errRequestLimit
+	}
+	if size, ok := body["page_size"].(float64); schema == "enumeration" && ok && size > store.ShrimpEnumerationMaxPage {
+		return nil, errRequestLimit
 	}
 	if err := h.resolved[schema].Validate(body); err != nil {
 		return nil, err
@@ -299,10 +311,6 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		}
 	}
 	commands := body["commands"].([]any)
-	if len(commands) != 1 {
-		h.problem(w, 400, "limit_exceeded", "acceptance")
-		return
-	}
 	if len(body["required_capabilities"].([]any)) != 0 || body["reconciliation"] != nil {
 		h.problem(w, 400, "unsupported_operation", "acceptance")
 		return
@@ -326,10 +334,6 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 	}
 	for _, token := range body["required_dependencies"].([]any) {
 		m.Dependencies = append(m.Dependencies, token.(string))
-	}
-	if len(m.Dependencies) > 16 {
-		h.problem(w, 400, "limit_exceeded", "acceptance")
-		return
 	}
 	switch m.Action {
 	case "create_subject":
@@ -453,10 +457,6 @@ func (h *Handler) read(w http.ResponseWriter, r *http.Request) {
 	for _, v := range body["required_dependencies"].([]any) {
 		deps = append(deps, v.(string))
 	}
-	if len(deps) > 16 {
-		h.problem(w, 400, "limit_exceeded", "read")
-		return
-	}
 	id := resource["id"].(string)
 	s, frontier, err := h.driver.ReadShrimp(r.Context(), id, deps)
 	if err != nil {
@@ -492,7 +492,7 @@ func (h *Handler) bodyProblem(w http.ResponseWriter, err error, stage string) {
 	switch {
 	case errors.Is(err, errRequestTooLarge):
 		h.problem(w, http.StatusRequestEntityTooLarge, "limit_exceeded", stage)
-	case errors.Is(err, errJSONDepth):
+	case errors.Is(err, errJSONDepth), errors.Is(err, errRequestLimit):
 		h.problem(w, http.StatusBadRequest, "limit_exceeded", stage)
 	default:
 		h.problemRecovery(w, http.StatusBadRequest, "invalid_request", stage, "correct_new_work_or_recover", 0)

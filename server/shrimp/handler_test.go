@@ -73,6 +73,7 @@ func TestBodyProblemsKeepFailureClassAndUnknownOutcome(t *testing.T) {
 	}{
 		{"bytes", "limit_exceeded", errors.Wrap(errRequestTooLarge, "private detail"), 413},
 		{"depth", "limit_exceeded", errors.Wrap(errJSONDepth, "private detail"), 400},
+		{"shape_limit", "limit_exceeded", errors.Wrap(errRequestLimit, "private detail"), 400},
 		{"malformed", "invalid_request", errors.New("private parser detail"), 400},
 		{"read_failed", "invalid_request", errors.Wrap(io.ErrUnexpectedEOF, "private detail"), 400},
 	} {
@@ -164,4 +165,30 @@ func assertBoundedRetry(t *testing.T, w *httptest.ResponseRecorder, status int, 
 	require.Nil(t, body["command_id"])
 	require.Equal(t, map[string]any{"action": "retry_with_fresh_proof", "retry_after_seconds": float64(1)}, body["recovery"])
 	require.NotContains(t, w.Body.String(), "private")
+}
+
+func TestAdvertisedLimitsPrecedeSchemaCeilings(t *testing.T) {
+	var schema jsonschema.Schema
+	require.NoError(t, json.Unmarshal([]byte(`{"type":"object","properties":{"commands":{"type":"array","maxItems":64},"required_dependencies":{"type":"array","maxItems":64},"page_size":{"type":"integer","maximum":1000}}}`), &schema))
+	resolved, err := schema.Resolve(nil)
+	require.NoError(t, err)
+	h := &Handler{resolved: map[string]*jsonschema.Resolved{"mutation": resolved, "read": resolved, "enumeration": resolved}}
+	for _, tc := range []struct {
+		name, schema, field string
+		value               any
+	}{
+		{"commands", "mutation", "commands", make([]any, 65)},
+		{"mutation_dependencies", "mutation", "required_dependencies", make([]any, 65)},
+		{"read_dependencies", "read", "required_dependencies", make([]any, 65)},
+		{"enumeration_dependencies", "enumeration", "required_dependencies", make([]any, 65)},
+		{"enumeration_page", "enumeration", "page_size", 1001},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			encoded, err := json.Marshal(map[string]any{tc.field: tc.value})
+			require.NoError(t, err)
+			r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(string(encoded)))
+			_, err = h.body(r, tc.schema)
+			require.ErrorIs(t, err, errRequestLimit)
+		})
+	}
 }
