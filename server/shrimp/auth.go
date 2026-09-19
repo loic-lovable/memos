@@ -43,13 +43,33 @@ func oneHeader(r *http.Request, name string) (string, error) {
 	return values[0], nil
 }
 
-func (h *Handler) authenticate(r *http.Request) (*accessClaims, error) {
+// authenticationFailure preserves the OAuth failure class without exposing JWT
+// parser or storage details in responses (or in this error's public text).
+type authenticationFailure struct {
+	code  string
+	cause error
+}
+
+func (e *authenticationFailure) Error() string { return e.code }
+func (e *authenticationFailure) Unwrap() error { return e.cause }
+
+func (h *Handler) authenticate(r *http.Request) (_ *accessClaims, err error) {
+	failureCode := "invalid_token"
+	defer func() {
+		if err != nil && !errors.Is(err, store.ErrShrimpProofStorage) {
+			err = &authenticationFailure{code: failureCode, cause: err}
+		}
+	}()
+	if len(r.Header.Values("Authorization")) == 0 {
+		failureCode = "unauthenticated"
+		return nil, errors.New("resource credential required")
+	}
 	authorization, err := oneHeader(r, "Authorization")
 	if err != nil {
 		return nil, err
 	}
 	scheme, access, ok := strings.Cut(authorization, " ")
-	if !ok || scheme != "DPoP" {
+	if !ok || !strings.EqualFold(scheme, "DPoP") {
 		return nil, errors.New("DPoP required")
 	}
 	if err := strictJWT(access); err != nil {
@@ -68,6 +88,7 @@ func (h *Handler) authenticate(r *http.Request) (*accessClaims, error) {
 	if claims.IssuedAt == nil || claims.ExpiresAt == nil || claims.ExpiresAt.Sub(claims.IssuedAt.Time) > 300*time.Second || claims.ID == "" || claims.ClientID != h.config.ClientID || claims.Subject != claims.ClientID || claims.Confirmation.Thumbprint == "" {
 		return nil, errors.New("invalid access claims")
 	}
+	failureCode = "invalid_dpop_proof"
 	proof, err := oneHeader(r, "DPoP")
 	if err != nil {
 		return nil, err
@@ -119,8 +140,14 @@ func (h *Handler) authenticate(r *http.Request) (*accessClaims, error) {
 	}
 	now := time.Now()
 	hash := sha256.Sum256([]byte(access))
-	if pc.IssuedAt == nil || now.Sub(pc.IssuedAt.Time) > 60*time.Second || pc.IssuedAt.After(now.Add(5*time.Second)) || pc.ID == "" || len(pc.ID) > 128 || pc.Method != r.Method || pc.URL != h.origin+r.URL.EscapedPath() || r.URL.RawQuery != "" || pc.AccessHash != base64.RawURLEncoding.EncodeToString(hash[:]) || thumbprint != claims.Confirmation.Thumbprint {
+	if pc.IssuedAt == nil || now.Sub(pc.IssuedAt.Time) > 60*time.Second || pc.IssuedAt.After(now.Add(5*time.Second)) || pc.ID == "" || len(pc.ID) > 128 || pc.Method != r.Method || pc.URL != h.origin+r.URL.EscapedPath() || r.URL.RawQuery != "" || pc.AccessHash != base64.RawURLEncoding.EncodeToString(hash[:]) {
 		return nil, errors.New("invalid proof binding")
+	}
+	// A valid proof made with a different key fails token confirmation, not
+	// proof validation (RFC 9449 section 7.1).
+	if thumbprint != claims.Confirmation.Thumbprint {
+		failureCode = "invalid_token"
+		return nil, errors.New("token confirmation failed")
 	}
 	replay := sha256.Sum256([]byte(thumbprint + "\x00" + pc.ID))
 	if err := h.driver.ConsumeShrimpProof(r.Context(), hex.EncodeToString(replay[:]), pc.IssuedAt.Unix()+65); err != nil {
@@ -157,4 +184,33 @@ func strictJWT(value string) error {
 		}
 	}
 	return nil
+}
+
+// authenticationProblem never correlates an unauthenticated request with stored
+// operations; a refusal cannot establish the outcome of an earlier attempt.
+func (h *Handler) authenticationProblem(w http.ResponseWriter, err error) {
+	if errors.Is(err, store.ErrShrimpProofStorage) {
+		h.problemRecovery(w, http.StatusServiceUnavailable, "storage_unavailable", "authentication", "retry_with_fresh_proof", 1)
+		return
+	}
+	var failure *authenticationFailure
+	if !errors.As(err, &failure) {
+		h.problemRecovery(w, http.StatusServiceUnavailable, "storage_unavailable", "authentication", "retry_with_fresh_proof", 1)
+		return
+	}
+	challenge, recovery := `DPoP algs="ES256"`, "obtain_token"
+	switch failure.code {
+	case "invalid_token":
+		challenge, recovery = `DPoP error="invalid_token", algs="ES256"`, "renew_authentication"
+	case "invalid_dpop_proof":
+		challenge, recovery = `DPoP error="invalid_dpop_proof", algs="ES256"`, "correct_proof"
+	}
+	w.Header().Set("WWW-Authenticate", challenge)
+	h.problemRecovery(w, http.StatusUnauthorized, failure.code, "authentication", recovery, 0)
+}
+
+func (h *Handler) insufficientScope(w http.ResponseWriter, scope string) {
+	// Callers supply only fixed protocol scope names, never request values.
+	w.Header().Set("WWW-Authenticate", `DPoP error="insufficient_scope", scope="`+scope+`", algs="ES256"`)
+	h.problemRecovery(w, http.StatusForbidden, "insufficient_scope", "authorization", "request_authorization", 0)
 }

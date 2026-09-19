@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -139,12 +140,21 @@ func send(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 func (h *Handler) problem(w http.ResponseWriter, status int, code, stage string) {
+	h.problemRecovery(w, status, code, stage, "inspect_or_repair", 0)
+}
+
+func (h *Handler) problemRecovery(w http.ResponseWriter, status int, code, stage, recovery string, retryAfter int) {
+	var retry any
+	if retryAfter > 0 {
+		retry = retryAfter
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+	}
 	if audit, ok := w.(*auditResponse); ok {
 		audit.code, audit.stage = code, stage
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": code, "status": status, "code": code, "stage": stage, "operation": nil, "command_id": nil, "commit": "unknown", "recovery": map[string]any{"action": "inspect_or_repair", "retry_after_seconds": nil}})
+	_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": code, "status": status, "code": code, "stage": stage, "operation": nil, "command_id": nil, "commit": "unknown", "recovery": map[string]any{"action": recovery, "retry_after_seconds": retry}})
 }
 
 // ServeHTTP authenticates before negotiation or revealing protected route state.
@@ -160,12 +170,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	claims, err := h.authenticate(r)
 	if err != nil {
-		if errors.Is(err, store.ErrShrimpProofStorage) {
-			h.problem(w, 503, "storage_unavailable", "authentication")
-			return
-		}
-		w.Header().Set("WWW-Authenticate", `DPoP error="invalid_dpop_proof", algs="ES256"`)
-		h.problem(w, 401, "invalid_dpop_proof", "authentication")
+		h.authenticationProblem(w, err)
 		return
 	}
 	if r.Method == http.MethodPost && r.URL.Path == h.path+"/mutations" {
@@ -177,7 +182,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) authenticated(w http.ResponseWriter, r *http.Request, claims *accessClaims) {
 	if !hasScope(claims, "shrimp.read") {
-		h.problem(w, 403, "insufficient_scope", "authorization")
+		h.insufficientScope(w, "shrimp.read")
 		return
 	}
 	if !strings.HasPrefix(r.URL.Path, h.path+"/") {
@@ -208,8 +213,12 @@ func (h *Handler) authenticated(w http.ResponseWriter, r *http.Request, claims *
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(value)
 	case r.Method == "GET" && path == "/replay-window":
-		if !h.config.AllowWrite || !hasScope(claims, "shrimp.write") {
-			h.problem(w, 403, "insufficient_scope", "authorization")
+		if !hasScope(claims, "shrimp.write") {
+			h.insufficientScope(w, "shrimp.write")
+			return
+		}
+		if !h.config.AllowWrite {
+			h.problem(w, 403, "forbidden", "authorization")
 			return
 		}
 		id, closes, err := h.driver.ShrimpWindow(r.Context(), claims.Subject)
@@ -353,9 +362,12 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 			status = 400
 			stage = "acceptance"
 		case "insufficient_scope":
-			code = err.Error()
-			status = 403
-			stage = "authorization"
+			if !hasScope(claims, "shrimp.write") {
+				h.insufficientScope(w, "shrimp.write")
+			} else {
+				h.problem(w, 403, "forbidden", "authorization")
+			}
+			return
 		case "execution_deadline_expired":
 			code = err.Error()
 			status = 409
