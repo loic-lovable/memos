@@ -1,4 +1,4 @@
-package shrimp
+package server
 
 import (
 	"context"
@@ -17,24 +17,22 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-
-	"github.com/usememos/memos/store"
 )
 
 type proofStore struct {
-	store.ShrimpDriver
+	Application
 	used    map[string]bool
 	failure error
 	calls   int
 }
 
-func (d *proofStore) ConsumeShrimpProof(_ context.Context, id string, _ int64) error {
+func (d *proofStore) ConsumeProof(_ context.Context, id string, _ int64) error {
 	d.calls++
 	if d.failure != nil {
 		return d.failure
 	}
 	if d.used[id] {
-		return store.ErrShrimpProofReplay
+		return ErrProofReplay
 	}
 	d.used[id] = true
 	return nil

@@ -65,7 +65,7 @@
         }
       ],
       "binding_mechanisms": [],
-      "healthy_conditions": "Disposable single-process SQLite pilot with at most 10000 retained operations. Only listed operations, one human command per mutation, source reference plus displayName required on creation; displayName-only updates. No complete profile, public audit, sync, existing-session revocation, backup restore, or multi-process admission guarantee.",
+      "healthy_conditions": "Application must supply healthy conditions at construction.",
       "audit_surface": {
         "families": [
           "subject",

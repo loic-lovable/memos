@@ -1,5 +1,4 @@
-// Package shrimp contains the explicitly limited HTTPS pilot integration.
-package shrimp
+package server
 
 import (
 	"crypto/ecdsa"
@@ -15,8 +14,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
-
-	"github.com/usememos/memos/store"
 )
 
 type accessClaims struct {
@@ -56,7 +53,7 @@ func (e *authenticationFailure) Unwrap() error { return e.cause }
 func (h *Handler) authenticate(r *http.Request) (_ *accessClaims, err error) {
 	failureCode := "invalid_token"
 	defer func() {
-		if err != nil && !errors.Is(err, store.ErrShrimpProofStorage) {
+		if err != nil && !errors.Is(err, ErrProofStorage) {
 			err = &authenticationFailure{code: failureCode, cause: err}
 		}
 	}()
@@ -150,11 +147,11 @@ func (h *Handler) authenticate(r *http.Request) (_ *accessClaims, err error) {
 		return nil, errors.New("token confirmation failed")
 	}
 	replay := sha256.Sum256([]byte(thumbprint + "\x00" + pc.ID))
-	if err := h.driver.ConsumeShrimpProof(r.Context(), hex.EncodeToString(replay[:]), pc.IssuedAt.Unix()+65); err != nil {
-		if errors.Is(err, store.ErrShrimpProofReplay) {
+	if err := h.driver.ConsumeProof(r.Context(), hex.EncodeToString(replay[:]), pc.IssuedAt.Unix()+65); err != nil {
+		if errors.Is(err, ErrProofReplay) {
 			return nil, err
 		}
-		return nil, errors.Wrap(store.ErrShrimpProofStorage, err.Error())
+		return nil, errors.Wrap(ErrProofStorage, err.Error())
 	}
 	return claims, nil
 }
@@ -189,7 +186,7 @@ func strictJWT(value string) error {
 // authenticationProblem never correlates an unauthenticated request with stored
 // operations; a refusal cannot establish the outcome of an earlier attempt.
 func (h *Handler) authenticationProblem(w http.ResponseWriter, err error) {
-	if errors.Is(err, store.ErrShrimpProofStorage) {
+	if errors.Is(err, ErrProofStorage) {
 		h.problemRecovery(w, http.StatusServiceUnavailable, "storage_unavailable", "authentication", "retry_with_fresh_proof", 1)
 		return
 	}

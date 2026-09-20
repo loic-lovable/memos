@@ -6,6 +6,7 @@ RUN apk add --no-cache git ca-certificates
 
 # Copy go mod files and download dependencies (cached layer)
 COPY go.mod go.sum ./
+COPY third_party/shrimp-sdk ./third_party/shrimp-sdk
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 

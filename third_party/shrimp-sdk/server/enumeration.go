@@ -1,4 +1,4 @@
-package shrimp
+package server
 
 import (
 	"crypto/sha256"
@@ -8,11 +8,9 @@ import (
 	"slices"
 
 	"github.com/pkg/errors"
-
-	"github.com/usememos/memos/store"
 )
 
-func (h *Handler) directRecord(record store.ShrimpRecord) map[string]any {
+func (h *Handler) directRecord(record Record) map[string]any {
 	s := record.Subject
 	revision := s.Revision
 	var value any = map[string]any{"profile": "human", "lifecycle": s.Lifecycle, "expires_at": nil, "attributes": map[string]any{"displayName": map[string]any{"value": s.DisplayName, "authority": h.config.Authority, "revision": s.Revision}}}
@@ -60,7 +58,7 @@ func enumerationSelection(body map[string]any) (string, error) {
 	return hex.EncodeToString(hash[:]), nil
 }
 
-func (h *Handler) enumerationResponse(view any, page *store.ShrimpEnumerationPage) map[string]any {
+func (h *Handler) enumerationResponse(view any, page *EnumerationPage) map[string]any {
 	records := make([]any, 0, len(page.Records))
 	for _, record := range page.Records {
 		records = append(records, h.directRecord(record))
@@ -74,11 +72,11 @@ func (h *Handler) enumerationResponse(view any, page *store.ShrimpEnumerationPag
 		"more": page.Cursor != "", "next_cursor": cursor, "cursor_expires_at": expiry}
 }
 
-func (h *Handler) enumerationFits(view any, limit int) func(*store.ShrimpEnumerationPage) (bool, error) {
+func (h *Handler) enumerationFits(view any, limit int) func(*EnumerationPage) (bool, error) {
 	// Candidates are prefixes of one immutable observation. Measure each record
 	// once; large attributes must not make page preparation quadratic in bytes.
 	prefixBytes := []int{0}
-	return func(page *store.ShrimpEnumerationPage) (bool, error) {
+	return func(page *EnumerationPage) (bool, error) {
 		for len(prefixBytes) <= len(page.Records) {
 			index := len(prefixBytes) - 1
 			encoded, err := json.Marshal(h.directRecord(page.Records[index]))
@@ -120,7 +118,7 @@ func (h *Handler) enumerate(w http.ResponseWriter, r *http.Request, claims *acce
 		h.problem(w, 503, "unavailable", "read")
 		return
 	}
-	request := store.ShrimpEnumeration{Principal: claims.Subject, Scope: string(scope), Authorization: h.config.Authority,
+	request := Enumeration{Principal: claims.Subject, Scope: string(scope), Authorization: h.config.Authority,
 		Epoch: h.scope()["history_epoch"].(string), Selection: selection, PageSize: int(body["page_size"].(float64)), Visible: true}
 	request.Cursor, _ = body["cursor"].(string)
 	for _, v := range view["resource_types"].([]any) {
@@ -132,10 +130,10 @@ func (h *Handler) enumerate(w http.ResponseWriter, r *http.Request, claims *acce
 	if filter, ok := view["authority_filter"].([]any); ok {
 		request.Visible = slices.Contains(filter, any(h.config.Authority))
 	}
-	page, err := h.driver.EnumerateShrimp(r.Context(), request, h.enumerationFits(view, 1048576))
+	page, err := h.driver.Enumerate(r.Context(), request, h.enumerationFits(view, 1048576))
 	if err != nil {
 		status, code := 503, "unavailable"
-		var failure store.ShrimpEnumerationError
+		var failure EnumerationError
 		if errors.As(err, &failure) {
 			if selected, ok := map[string]int{"invalid_cursor": 400, "unsupported_resource": 400, "limit_exceeded": 400,
 				"invalid_dependency": 409, "cursor_scope_mismatch": 403, "view_changed": 409, "cursor_epoch_mismatch": 409,

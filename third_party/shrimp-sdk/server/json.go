@@ -1,4 +1,4 @@
-package shrimp
+package server
 
 import (
 	"bytes"

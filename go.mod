@@ -21,6 +21,7 @@ require (
 	github.com/labstack/echo/v5 v5.3.1
 	github.com/lib/pq v1.12.3
 	github.com/lithammer/shortuuid/v4 v4.2.0
+	github.com/lovablelabs/shrimp-protocol/sdk/go v0.0.0
 	github.com/moby/moby/api v1.55.0
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/openai/openai-go/v3 v3.51.0
@@ -152,3 +153,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.0 // indirect
 )
+
+replace github.com/lovablelabs/shrimp-protocol/sdk/go => ./third_party/shrimp-sdk

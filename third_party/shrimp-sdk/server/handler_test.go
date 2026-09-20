@@ -1,4 +1,4 @@
-package shrimp
+package server
 
 import (
 	"context"
@@ -13,8 +13,6 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-
-	"github.com/usememos/memos/store"
 )
 
 func TestVersionNegotiationErrorsDoNotSelectAContract(t *testing.T) {
@@ -148,17 +146,17 @@ func TestBodyProblemsKeepFailureClassAndUnknownOutcome(t *testing.T) {
 }
 
 type boundsDriver struct {
-	store.ShrimpDriver
+	Application
 	failure error
 	calls   int
 }
 
-func (d *boundsDriver) ShrimpWindow(context.Context, string) (string, int64, error) {
+func (d *boundsDriver) Window(context.Context, string) (string, int64, error) {
 	d.calls++
 	return "retained-window", time.Now().Unix() + 300, d.failure
 }
 
-func (d *boundsDriver) EnumerateShrimp(context.Context, store.ShrimpEnumeration, func(*store.ShrimpEnumerationPage) (bool, error)) (*store.ShrimpEnumerationPage, error) {
+func (d *boundsDriver) Enumerate(context.Context, Enumeration, func(*EnumerationPage) (bool, error)) (*EnumerationPage, error) {
 	d.calls++
 	return nil, d.failure
 }
@@ -170,7 +168,7 @@ func TestWindowQuotaDiffersFromStorageFailure(t *testing.T) {
 		status     int
 	}{
 		{"healthy", "", nil, 200},
-		{"quota", "throttled", errors.Wrap(store.ErrShrimpWindowQuota, "private detail"), 429},
+		{"quota", "throttled", errors.Wrap(ErrWindowQuota, "private detail"), 429},
 		{"storage", "storage_unavailable", errors.New("private storage detail"), 503},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -193,7 +191,7 @@ func TestWindowQuotaDiffersFromStorageFailure(t *testing.T) {
 }
 
 func TestEnumerationThrottleMatchesRetryBody(t *testing.T) {
-	driver := &boundsDriver{failure: errors.Wrap(store.ShrimpEnumerationError("throttled"), "private detail")}
+	driver := &boundsDriver{failure: errors.Wrap(EnumerationError("throttled"), "private detail")}
 	h := &Handler{driver: driver, resolved: map[string]*jsonschema.Resolved{"enumeration": objectSchema(t)}}
 	r := httptest.NewRequest(http.MethodPost, "/enumerations", strings.NewReader(`{"view":{"resource_types":["subject"],"authority_filter":null,"representation":"full-direct-records"},"cursor":null,"wait_ms":0,"page_size":1,"required_dependencies":[],"required_profiles":[]}`))
 	w := httptest.NewRecorder()

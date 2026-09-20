@@ -1,4 +1,4 @@
-package shrimp
+package server
 
 import (
 	"encoding/json"
@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/usememos/memos/store"
 )
 
 func TestEnumerationSelectionNormalizesSetsButPreservesPresence(t *testing.T) {
@@ -39,10 +37,10 @@ func TestEnumerationSelectionNormalizesSetsButPreservesPresence(t *testing.T) {
 func TestEnumerationByteLimitMeasuresActualWireIncludingEscaping(t *testing.T) {
 	h := &Handler{config: Config{Resource: "https://pilot.example/tenants/acme/domains/A", Authority: "authority<&>"}}
 	view := map[string]any{"resource_types": []string{"source_reference", "subject"}, "authority_filter": nil, "representation": "full-direct-records"}
-	subject := store.ShrimpSubject{ID: "subject", SourceID: "source", Revision: "r1", SourceRevision: "r0", DisplayName: "<>& é 世界", SourceReference: "external", Lifecycle: "disabled"}
-	records := []store.ShrimpRecord{{Type: "source_reference", ID: "source", Subject: subject}, {Type: "subject", ID: "subject", Subject: subject}}
+	subject := Subject{ID: "subject", SourceID: "source", Revision: "r1", SourceRevision: "r0", DisplayName: "<>& é 世界", SourceReference: "external", Lifecycle: "disabled"}
+	records := []Record{{Type: "source_reference", ID: "source", Subject: subject}, {Type: "subject", ID: "subject", Subject: subject}}
 	for _, terminal := range []bool{false, true} {
-		page := &store.ShrimpEnumerationPage{Records: records, Frontier: "frontier"}
+		page := &EnumerationPage{Records: records, Frontier: "frontier"}
 		if !terminal {
 			page.Cursor, page.ExpiresAt = "opaque-cursor", 2000000000
 		}

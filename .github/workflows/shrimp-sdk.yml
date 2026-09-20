@@ -1,0 +1,29 @@
+name: Experimental Go server SDK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sdk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: third_party/shrimp-sdk
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: third_party/shrimp-sdk/go.mod
+          cache-dependency-path: third_party/shrimp-sdk/go.sum
+      - run: go mod tidy -diff
+      - run: go test -race -shuffle=on ./...
+      - run: go vet ./...
+      - run: go build ./...
