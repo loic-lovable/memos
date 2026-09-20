@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 
+	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -129,6 +130,9 @@ func (s *APIV1Service) DeleteLinkedIdentity(ctx context.Context, request *v1pb.D
 		UserID:   &userID,
 		Provider: &provider,
 	}); err != nil {
+		if errors.Is(err, store.ErrShrimpManagedIdentity) {
+			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+		}
 		return nil, status.Errorf(codes.Internal, "failed to delete linked identity: %v", err)
 	}
 	return &emptypb.Empty{}, nil

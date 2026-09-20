@@ -21,6 +21,13 @@ var errShrimpDependency = errors.New("invalid_dependency")
 
 const shrimpColumns = "id, user_id, source_id, source_revision, source_reference, revision, lifecycle, display_name"
 
+// ShrimpEnrolled reports whether this database requires SHRIMP enforcement.
+func (d *DB) ShrimpEnrolled(ctx context.Context) (bool, error) {
+	var count int
+	err := d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM shrimp_deployment").Scan(&count)
+	return count > 0, err
+}
+
 func readShrimpSubject(ctx context.Context, q rowQuerier, id string) (*store.ShrimpSubject, error) {
 	s := &store.ShrimpSubject{}
 	err := q.QueryRowContext(ctx, "SELECT "+shrimpColumns+" FROM shrimp_subject WHERE id=? OR source_id=?", id, id).
@@ -233,6 +240,14 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 		// No existing account is discovered or adopted from a matching attribute.
 		if err := tx.QueryRowContext(ctx, "INSERT INTO user(username,role,nickname,password_hash,row_status) VALUES(?,'USER',?,'','ARCHIVED') RETURNING id", "p"+strings.ReplaceAll(id, "-", ""), m.DisplayName).Scan(&s.UserID); err != nil {
 			return nil, err
+		}
+		if m.SSOProvider != "" {
+			// The trusted deployment maps the opaque source reference to this
+			// provider's stable subject. A collision rolls back the new account;
+			// it never adopts an existing user by email or username.
+			if err := insertUserIdentity(ctx, tx, &store.UserIdentity{UserID: s.UserID, Provider: m.SSOProvider, ExternUID: m.SourceReference}); err != nil {
+				return nil, err
+			}
 		}
 		_, err := tx.ExecContext(ctx, "INSERT INTO shrimp_subject(id,user_id,source_id,source_revision,source_reference,source_key,revision,lifecycle,display_name) VALUES(?,?,?,?,?,?,?,?,?)", id, s.UserID, source, revision, m.SourceReference, hex.EncodeToString(hash[:]), revision, s.Lifecycle, m.DisplayName)
 		return s, err

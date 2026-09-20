@@ -63,6 +63,7 @@ func init() {
 	rootCmd.Flags().String("driver", "sqlite", "database driver (sqlite, mysql, postgres, d1)")
 	rootCmd.Flags().String("dsn", "", "database source name (DSN)")
 	rootCmd.Flags().String("instance-url", "", "canonical external URL of the Memos instance")
+	rootCmd.Flags().String("shrimp-config", "", "experimental SHRIMP configuration file (single-process SQLite)")
 	rootCmd.Flags().Bool("allow-private-webhooks", false, "allow webhooks to access any private/reserved IP address")
 	rootCmd.Flags().StringSlice("webhook-private-network-allowlist", nil, "private webhook destinations to allow (exact hostname, IP, or CIDR)")
 	rootCmd.Flags().String("log-level", "info", "log verbosity level (debug, info, warn, error)")
@@ -81,6 +82,7 @@ func init() {
 		"driver",
 		"dsn",
 		"instance-url",
+		"shrimp-config",
 		"allow-private-webhooks",
 		"webhook-private-network-allowlist",
 		"log-level",
@@ -117,6 +119,7 @@ func runServer() error {
 		Driver:         viper.GetString("driver"),
 		DSN:            viper.GetString("dsn"),
 		InstanceURL:    viper.GetString("instance-url"),
+		ShrimpConfig:   viper.GetString("shrimp-config"),
 		RateLimit:      viper.GetBool("rate-limit"),
 		TrustedProxies: viper.GetStringSlice("trusted-proxies"),
 		Version:        version.GetCurrentVersion(),
@@ -172,6 +175,8 @@ func runServer() error {
 	defer signal.Stop(signals)
 
 	if err := s.Start(); err != nil {
+		s.Shutdown(context.Background())
+		closeStore = false
 		return errors.Wrap(err, "failed to start server")
 	}
 	closeStore = false
@@ -207,12 +212,16 @@ func printServerInfo(profile *profile.Profile, accessMode storepb.InstanceAccess
 
 	// Connection information
 	if len(profile.UNIXSock) == 0 {
+		scheme := "http"
+		if profile.ShrimpConfig != "" {
+			scheme = "https"
+		}
 		if len(profile.Addr) == 0 {
 			fmt.Printf("Server running on port %d\n", profile.Port)
-			fmt.Printf("Access your memos at: http://localhost:%d\n", profile.Port)
+			fmt.Printf("Access your memos at: %s://localhost:%d\n", scheme, profile.Port)
 		} else {
 			fmt.Printf("Server running on %s:%d\n", profile.Addr, profile.Port)
-			fmt.Printf("Access your memos at: http://%s:%d\n", profile.Addr, profile.Port)
+			fmt.Printf("Access your memos at: %s://%s:%d\n", scheme, profile.Addr, profile.Port)
 		}
 	} else {
 		fmt.Printf("Server running on unix socket: %s\n", profile.UNIXSock)

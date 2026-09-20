@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,80 @@ import (
 	apiv1 "github.com/usememos/memos/server/api/v1"
 	"github.com/usememos/memos/store"
 )
+
+func TestProvisionedSSOAttemptStaysFencedAfterDisableAndRestore(t *testing.T) {
+	ts := NewTestService(t)
+	defer ts.Cleanup()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	provider := newMockOAuthServer(t, "sso-code", "sso-token", map[string]any{"sub": "provisioned-alice"})
+	defer provider.Close()
+	idpName := createTestingOAuthIdentityProvider(ctx, t, ts, provider.URL, "pilot-sso")
+	require.NoError(t, ts.Store.EnableShrimpPilot(ctx, "test-enrollment"))
+	driver := ts.Store.GetDriver().(store.ShrimpDriver)
+	mutate := func(action string, subject *store.ShrimpSubject) *store.ShrimpSubject {
+		window, closes, err := driver.ShrimpWindow(ctx, "hr")
+		require.NoError(t, err)
+		intent := store.ShrimpMutation{Principal: "hr", Window: window, ID: uuid.NewV4().String(), Fingerprint: uuid.NewV4().String(),
+			Action: action, Deadline: closes - 1, CommandID: "c1", SourceReference: "provisioned-alice", DisplayName: "Alice", SSOProvider: "pilot-sso"}
+		if subject != nil {
+			intent.SubjectID, intent.ExpectedRevision = subject.ID, subject.Revision
+		}
+		result, err := ts.Store.ApplyShrimp(ctx, intent)
+		require.NoError(t, err)
+		require.Empty(t, result.Error)
+		return &result.Subject
+	}
+	subject := mutate("activate", mutate("create_subject", nil))
+	entered, resume := make(chan struct{}), make(chan struct{})
+	ts.Service.BeforeCredentialPublication = func(ctx context.Context, id int32, kind string) error {
+		close(entered)
+		select {
+		case <-resume:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	type outcome struct {
+		response *v1pb.SignInResponse
+		err      error
+		cookie   string
+	}
+	finished := make(chan outcome, 1)
+	signIn := func() outcome {
+		requestCtx, release := store.WithAdmissionScope(apiv1.WithHeaderCarrier(ctx))
+		defer release()
+		response, err := ts.Service.SignIn(requestCtx, &v1pb.SignInRequest{Credentials: &v1pb.SignInRequest_SsoCredentials{
+			SsoCredentials: &v1pb.SignInRequest_SSOCredentials{IdpName: idpName, Code: "sso-code", RedirectUri: "http://localhost:8080/auth/callback"}}})
+		return outcome{response, err, apiv1.GetHeaderCarrier(requestCtx).Get("Set-Cookie")}
+	}
+	go func() { finished <- signIn() }()
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("SSO never reached credential publication")
+	}
+	subject = mutate("activate", mutate("disable", subject))
+	close(resume)
+	var old outcome
+	select {
+	case old = <-finished:
+	case <-ctx.Done():
+		t.Fatal("held SSO did not finish")
+	}
+	require.Equal(t, codes.PermissionDenied, status.Code(old.err))
+	require.Nil(t, old.response)
+	require.Empty(t, old.cookie, "fenced SSO must not publish a refresh cookie")
+	ts.Service.BeforeCredentialPublication = nil
+	fresh := signIn()
+	require.NoError(t, fresh.err)
+	require.NotEmpty(t, fresh.response.AccessToken)
+	require.NotEmpty(t, fresh.cookie)
+	identity, err := ts.Store.GetUserIdentity(ctx, &store.FindUserIdentity{UserID: &subject.UserID})
+	require.NoError(t, err)
+	require.Equal(t, "provisioned-alice", identity.ExternUID)
+}
 
 func TestSSOSignInUsesValidIdentifierAsUsername(t *testing.T) {
 	tests := []struct {

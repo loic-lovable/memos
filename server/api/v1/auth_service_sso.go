@@ -277,6 +277,9 @@ func (s *APIV1Service) bindSSOIdentityToUser(ctx context.Context, currentUser *s
 		Provider:  provider,
 		ExternUID: externUID,
 	}); err != nil {
+		if errors.Is(err, store.ErrShrimpManagedIdentity) {
+			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
+		}
 		if errors.Is(err, store.ErrUserIdentityTaken) {
 			winner, getErr := s.getLinkedSSOUser(ctx, provider, externUID)
 			if getErr != nil {

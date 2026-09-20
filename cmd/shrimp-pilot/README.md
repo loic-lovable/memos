@@ -1,5 +1,11 @@
 # Disposable SHRIMP pilot
 
+For an interactive trial, the normal `cmd/memos` command now accepts
+`--shrimp-config` and serves the full browser app with public SHRIMP routes.
+Use `pilots/memos/app_trial.py` and `docs/memos-local-trial.md` in the coordinated
+SHRIMP checkout to build and run it with persistent notes and local synthetic SSO.
+This separate command remains the disposable fault-test backend.
+
 This command runs the Memos API plus a limited SHRIMP 0.2 integration on loopback
 HTTPS. It is separate from `cmd/memos`, has no browser frontend, and supports one
 process and a fresh SQLite database. Build with Go 1.27 or newer:
@@ -52,12 +58,14 @@ The SQLite database is bound to one resource, issuer/key ID, client and authorit
 It cannot be restarted under a different enrollment. The pilot process takes an
 OS file lock; arbitrary direct database writers do not participate in that lock.
 Do not attach this command to an existing installation or run it alongside another
-Memos process using the same database. Backup restoration, key rotation, SSO
-verification, public audit/inventory/sync and complete profile support remain open.
+Memos process using the same database. Backup restoration, key rotation,
+organization-backed SSO, public audit/inventory/sync and complete profile support
+remain open.
 
 MySQL/PostgreSQL migrations preserve repository schema parity; the pilot facade
-refuses to enable those drivers. Historical pilot tables do not enable public
-SHRIMP routes in the normal Memos launcher.
+refuses to enable those drivers. The normal launcher requires explicit
+`--shrimp-config` to enable public SHRIMP routes and refuses an enrolled database
+without it. It does not install private fault controls or request observers.
 
 ## Validation
 

@@ -37,6 +37,7 @@ type Config struct {
 	Authority       string `json:"authority"`
 	SchemaDirectory string `json:"schema_directory"`
 	AllowWrite      bool   `json:"allow_write"`
+	SSOProvider     string `json:"sso_provider,omitempty"`
 }
 
 // Handler exposes only the selected pilot operations, with explicit 0.2 selection.
@@ -70,7 +71,15 @@ func New(ctx context.Context, s *store.Store, config Config) (*Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	enrollment, _ := json.Marshal([]string{config.Resource, config.Issuer, config.IssuerKeyID, config.ClientID, config.Authority})
+	identity := []string{config.Resource, config.Issuer, config.IssuerKeyID, config.ClientID, config.Authority}
+	if config.SSOProvider != "" {
+		binding, err := ssoEnrollment(ctx, s, config.SSOProvider)
+		if err != nil {
+			return nil, err
+		}
+		identity = append(identity, binding)
+	}
+	enrollment, _ := json.Marshal(identity)
 	if err := s.EnableShrimpPilot(ctx, string(enrollment)); err != nil {
 		return nil, err
 	}
@@ -356,6 +365,7 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		}
 		m.SourceReference = source
 		m.DisplayName = name
+		m.SSOProvider = h.config.SSOProvider
 	case "activate", "disable", "retire", "update_subject":
 		resource := command["resource"].(map[string]any)
 		m.SubjectID = resource["id"].(string)

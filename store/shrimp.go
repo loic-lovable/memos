@@ -12,6 +12,9 @@ import (
 // ErrShrimpManagedWrite rejects native changes to source-owned lifecycle facts.
 var ErrShrimpManagedWrite = errors.New("managed lifecycle and display name require SHRIMP authority; retire before native deletion")
 
+// ErrShrimpManagedIdentity protects the pilot's fixed SSO account binding.
+var ErrShrimpManagedIdentity = errors.New("managed SSO identities cannot be linked or unlinked natively")
+
 // ErrAdmissionDenied means the current account or original attempt is fenced.
 var ErrAdmissionDenied = errors.New("account admission fenced")
 
@@ -34,6 +37,7 @@ type ShrimpSubject struct {
 type ShrimpMutation struct {
 	Principal, Window, ID, Fingerprint, Action, SubjectID, ExpectedRevision string
 	SourceReference, DisplayName                                            string
+	SSOProvider                                                             string
 	Deadline                                                                int64
 	Dependencies                                                            []string
 	CommandID                                                               string

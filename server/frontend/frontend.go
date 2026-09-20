@@ -84,6 +84,9 @@ func shouldSkipFrontendStatic(requestPath string) bool {
 		return true
 	}
 	return hasPathPrefix(requestPath, "/api") ||
+		hasPathPrefix(requestPath, "/shrimp") ||
+		hasPathPrefix(requestPath, "/.well-known/oauth-protected-resource") ||
+		hasPathPrefix(requestPath, "/__pilot") ||
 		hasPathPrefix(requestPath, "/file") ||
 		requestPath == "/memos.api.v1" ||
 		strings.HasPrefix(requestPath, "/memos.api.v1.")

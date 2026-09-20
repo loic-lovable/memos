@@ -34,6 +34,13 @@ type DeleteUserIdentity struct {
 // are responsible for reconciling concurrent first-login races on
 // (Provider, ExternUID).
 func (s *Store) CreateUserIdentity(ctx context.Context, create *UserIdentity) (*UserIdentity, error) {
+	if s.shrimpPilot {
+		s.admissionMu.Lock()
+		defer s.admissionMu.Unlock()
+		if err := s.checkUnmanagedIdentity(ctx, create.UserID); err != nil {
+			return nil, err
+		}
+	}
 	identity, err := s.driver.CreateUserIdentity(ctx, create)
 	if err != nil {
 		if uniqueErr := classifyUserUniqueViolation(err); uniqueErr != nil {
@@ -72,7 +79,32 @@ func (s *Store) ListUserIdentities(ctx context.Context, find *FindUserIdentity) 
 
 // DeleteUserIdentities deletes all linkage records matching the filter.
 func (s *Store) DeleteUserIdentities(ctx context.Context, delete *DeleteUserIdentity) error {
+	if s.shrimpPilot {
+		s.admissionMu.Lock()
+		defer s.admissionMu.Unlock()
+		identities, err := s.driver.ListUserIdentities(ctx, &FindUserIdentity{ID: delete.ID, UserID: delete.UserID, Provider: delete.Provider})
+		if err != nil {
+			return err
+		}
+		for _, identity := range identities {
+			if err := s.checkUnmanagedIdentity(ctx, identity.UserID); err != nil {
+				return err
+			}
+		}
+	}
 	return s.driver.DeleteUserIdentities(ctx, delete)
+}
+
+// Caller holds admissionMu against provisioned account changes and publication.
+func (s *Store) checkUnmanagedIdentity(ctx context.Context, userID int32) error {
+	_, revision, err := s.driver.(ShrimpDriver).ShrimpAdmission(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if revision != "" {
+		return ErrShrimpManagedIdentity
+	}
+	return nil
 }
 
 // GetUserIdentity returns the first linkage record matching the filter, or nil if none found.

@@ -41,9 +41,10 @@ type Server struct {
 	Profile *profile.Profile
 	Store   *store.Store
 
-	echoServer   *echo.Echo
-	httpServer   *http.Server
-	apiV1Service *apiv1.APIV1Service
+	echoServer    *echo.Echo
+	httpServer    *http.Server
+	apiV1Service  *apiv1.APIV1Service
+	shrimpRuntime *shrimpRuntime
 }
 
 func NewServer(ctx context.Context, profile *profile.Profile, store *store.Store) (*Server, error) {
@@ -63,6 +64,15 @@ func NewServer(ctx context.Context, profile *profile.Profile, store *store.Store
 	}
 	echoServer.Use(clientip.Middleware(clientIPResolver))
 	s.echoServer = echoServer
+	if err := s.configureShrimp(ctx); err != nil {
+		return nil, err
+	}
+	configured := false
+	defer func() {
+		if !configured {
+			s.closeShrimp()
+		}
+	}()
 
 	instanceBasicSetting, err := s.getOrUpsertInstanceBasicSetting(ctx)
 	if err != nil {
@@ -102,6 +112,7 @@ func NewServer(ctx context.Context, profile *profile.Profile, store *store.Store
 	}
 	mcpService.RegisterRoutes(echoServer)
 
+	configured = true
 	return s, nil
 }
 
@@ -132,8 +143,18 @@ func (s *Server) Start() error {
 		ReadHeaderTimeout: readHeaderTimeout,
 		IdleTimeout:       idleTimeout,
 	}
+	if s.shrimpRuntime != nil {
+		s.httpServer.Handler = shrimpAdmissionTransport(s.echoServer)
+		s.httpServer.TLSConfig = s.shrimpRuntime.tlsConfig
+	}
 	go func() {
-		if err := s.httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
+		var err error
+		if s.shrimpRuntime != nil {
+			err = s.httpServer.ServeTLS(listener, "", "")
+		} else {
+			err = s.httpServer.Serve(listener)
+		}
+		if err != nil && err != http.ErrServerClosed {
 			slog.Error("failed to start echo server", "error", err)
 		}
 	}()
@@ -142,6 +163,7 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) {
+	defer s.closeShrimp()
 	ctx, cancel := context.WithTimeout(ctx, shutdownTimeout)
 	defer cancel()
 

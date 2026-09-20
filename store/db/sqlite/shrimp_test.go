@@ -70,6 +70,50 @@ func TestApplyShrimpAtomicCreationAndRetry(t *testing.T) {
 	require.Equal(t, failed, recovered)
 }
 
+func TestShrimpSSOBindingIsAtomicAndCannotBeReassigned(t *testing.T) {
+	s, d := pilotStore(t)
+	ctx := t.Context()
+	intent := pilotIntent(t, d, "create_subject", nil)
+	intent.SSOProvider = "local-sso"
+	intent.SourceReference = "stable-subject"
+	created, err := s.ApplyShrimp(ctx, intent)
+	require.NoError(t, err)
+	require.Empty(t, created.Error)
+	identity, err := s.GetUserIdentity(ctx, &store.FindUserIdentity{Provider: &intent.SSOProvider, ExternUID: &intent.SourceReference})
+	require.NoError(t, err)
+	require.NotNil(t, identity)
+	require.Equal(t, created.Subject.UserID, identity.UserID)
+	retried, err := s.ApplyShrimp(ctx, intent)
+	require.NoError(t, err)
+	require.Equal(t, created, retried)
+	_, err = s.CreateUserIdentity(ctx, &store.UserIdentity{UserID: identity.UserID, Provider: "another", ExternUID: "attacker"})
+	require.ErrorIs(t, err, store.ErrShrimpManagedIdentity)
+	require.ErrorIs(t, s.DeleteUserIdentities(ctx, &store.DeleteUserIdentity{ID: &identity.ID}), store.ErrShrimpManagedIdentity)
+	retired, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "retire", &created.Subject))
+	require.NoError(t, err)
+	require.Empty(t, retired.Error)
+	require.ErrorIs(t, s.DeleteUserIdentities(ctx, &store.DeleteUserIdentity{Provider: &intent.SSOProvider}), store.ErrShrimpManagedIdentity)
+	kept, err := s.GetUserIdentity(ctx, &store.FindUserIdentity{ID: &identity.ID})
+	require.NoError(t, err)
+	require.Equal(t, identity, kept, "retirement retains the SSO binding")
+
+	// A native identity already owned by another user must not be adopted.
+	native, err := s.CreateUserWithIdentity(ctx, &store.User{Username: "native", Role: store.RoleUser, PasswordHash: "unused"},
+		&store.UserIdentity{Provider: "local-sso", ExternUID: "existing-subject"})
+	require.NoError(t, err)
+	collision := pilotIntent(t, d, "create_subject", nil)
+	collision.SSOProvider, collision.SourceReference = "local-sso", "existing-subject"
+	rejected, err := s.ApplyShrimp(ctx, collision)
+	require.NoError(t, err)
+	require.NotEmpty(t, rejected.Error)
+	users, err := s.ListUsers(ctx, &store.FindUser{})
+	require.NoError(t, err)
+	require.Len(t, users, 2, "identity conflict must roll back the newly inserted account")
+	link, err := s.GetUserIdentity(ctx, &store.FindUserIdentity{ExternUID: &collision.SourceReference})
+	require.NoError(t, err)
+	require.Equal(t, native.ID, link.UserID)
+}
+
 func TestApplyShrimpCompetingRevisionsAndNativeOwnership(t *testing.T) {
 	s, d := pilotStore(t)
 	ctx := t.Context()
