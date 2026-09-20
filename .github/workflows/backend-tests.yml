@@ -72,6 +72,10 @@ jobs:
               # Includes ./server/test, which boots the real server via
               # server.NewServer and smokes every router it mounts.
               go test -v -race -coverprofile=coverage.out -covermode=atomic ./server/...
+              # Keep the opt-in fault controls covered without including them
+              # in regular application builds.
+              go test -v -race -tags shrimptest ./server ./server/shrimp ./cmd/memos
+              go vet -tags shrimptest ./server ./server/shrimp ./cmd/memos
               ;;
             internal)
               go test -v -race -coverprofile=coverage.out -covermode=atomic ./internal/...

@@ -1,4 +1,6 @@
-package main
+//go:build shrimptest
+
+package server
 
 import (
 	"crypto/tls"
@@ -58,7 +60,7 @@ func TestPrivateAuthenticationObservation(t *testing.T) {
 	e := echo.New()
 	require.NoError(t, api.RegisterGateway(ctx, e))
 	c := newControls(s, "private-control-secret")
-	handler := admissionTransport(c.observeRequests(e))
+	handler := shrimpAdmissionTransport(c.observeRequests(e))
 	path := "/api/v1/users/" + user.Username + "/personalAccessTokens"
 	arm := func() string {
 		value, err := c.armAuth(ctx, created.Subject.ID, "pat")

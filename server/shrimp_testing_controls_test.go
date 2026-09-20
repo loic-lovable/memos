@@ -1,4 +1,6 @@
-package main
+//go:build shrimptest
+
+package server
 
 import (
 	"path/filepath"

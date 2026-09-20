@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"net/http"
@@ -44,7 +44,7 @@ func TestAdmissionTransportFlushesBeforeDisableCompletes(t *testing.T) {
 	ticket, err := s.AdmissionTicket(ctx, active.Subject.UserID)
 	require.NoError(t, err)
 	var publicationErr error
-	handler := admissionTransport(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := shrimpAdmissionTransport(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		publicationErr = s.PublishAdmission(r.Context(), active.Subject.UserID, ticket, func(*store.User) error { _, err := w.Write([]byte("credential")); return err })
 	}))
 	writer := &blockedFlush{ResponseRecorder: httptest.NewRecorder(), entered: make(chan struct{}), release: make(chan struct{})}

@@ -17,11 +17,12 @@ import (
 	"github.com/usememos/memos/store"
 )
 
-// SHRIMP is opt-in on the normal Memos server. No private fault or observation
-// routes are registered here. The first deployment scope is loopback TLS/SQLite.
+// SHRIMP is opt-in on the normal Memos server. Private fault controls are
+// compiled separately with the shrimptest build tag and require explicit setup.
 type shrimpRuntime struct {
 	tlsConfig *tls.Config
 	release   func()
+	testing   shrimpTestSettings
 }
 
 func (s *Server) configureShrimp(ctx context.Context) error {
@@ -58,6 +59,7 @@ func (s *Server) configureShrimp(ctx context.Context) error {
 	}
 	defer file.Close()
 	var config struct {
+		shrimpTestSettings
 		Shrimp                    shrimp.Config `json:"shrimp"`
 		Certificate               string        `json:"certificate"`
 		Key                       string        `json:"key"`
@@ -84,9 +86,16 @@ func (s *Server) configureShrimp(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := config.shrimpTestSettings.configure(s, handler); err != nil {
+		return err
+	}
 	s.echoServer.Any("/shrimp/*", echo.WrapHandler(handler))
 	s.echoServer.GET("/.well-known/oauth-protected-resource/*", echo.WrapHandler(handler))
-	s.shrimpRuntime = &shrimpRuntime{tlsConfig: &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}}, release: release}
+	s.shrimpRuntime = &shrimpRuntime{
+		tlsConfig: &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}},
+		release:   release,
+		testing:   config.shrimpTestSettings,
+	}
 	ready = true
 	return nil
 }

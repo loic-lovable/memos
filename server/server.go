@@ -95,6 +95,9 @@ func NewServer(ctx context.Context, profile *profile.Profile, store *store.Store
 
 	apiV1Service := apiv1.NewAPIV1Service(s.Secret, profile, store)
 	s.apiV1Service = apiV1Service
+	if s.shrimpRuntime != nil {
+		s.shrimpRuntime.testing.register(apiV1Service)
+	}
 
 	// Register HTTP file server routes BEFORE gRPC-Gateway to ensure proper range request handling for Safari.
 	// This uses native HTTP serving (http.ServeContent) instead of gRPC for video/audio files.
@@ -144,7 +147,7 @@ func (s *Server) Start() error {
 		IdleTimeout:       idleTimeout,
 	}
 	if s.shrimpRuntime != nil {
-		s.httpServer.Handler = shrimpAdmissionTransport(s.echoServer)
+		s.httpServer.Handler = shrimpAdmissionTransport(s.shrimpRuntime.testing.wrap(s.echoServer))
 		s.httpServer.TLSConfig = s.shrimpRuntime.tlsConfig
 	}
 	go func() {
