@@ -218,6 +218,10 @@ func (g *recoveryGuard) seal() error {
 }
 
 func recoveryFiles(database string) (map[string]string, error) {
+	return fingerprintRecoveryFiles(database, true)
+}
+
+func fingerprintRecoveryFiles(database string, durable bool) (map[string]string, error) {
 	files := make(map[string]string)
 	for _, suffix := range []string{"", "-wal", "-journal"} {
 		path := database + suffix
@@ -232,13 +236,20 @@ func recoveryFiles(database string) (map[string]string, error) {
 		if !singleRecoveryFile(info) {
 			return nil, errors.New("recovery checkpoint requires regular database files with one link")
 		}
-		file, err := os.OpenFile(path, os.O_RDWR, 0)
+		mode := os.O_RDONLY
+		if durable {
+			mode = os.O_RDWR
+		}
+		file, err := os.OpenFile(path, mode, 0)
 		if err != nil {
 			return nil, err
 		}
 		hash := sha256.New()
 		_, readErr := io.Copy(hash, file)
-		syncErr := file.Sync()
+		var syncErr error
+		if durable {
+			syncErr = file.Sync()
+		}
 		closeErr := file.Close()
 		if readErr != nil {
 			return nil, readErr

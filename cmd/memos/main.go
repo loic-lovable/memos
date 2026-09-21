@@ -108,7 +108,7 @@ func init() {
 	rootCmd.Version = version.GetCurrentVersion()
 	rootCmd.SetVersionTemplate("{{.Version}}\n")
 
-	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(versionCmd, newRecoveryStatusCommand())
 }
 
 func runServer() error {

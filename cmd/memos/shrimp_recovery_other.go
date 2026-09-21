@@ -14,3 +14,7 @@ func lockRecovery(string) (func(), error) {
 }
 
 func singleRecoveryFile(info os.FileInfo) bool { return info.Mode().IsRegular() }
+
+func inspectRecoveryLock(string) (func(), error) {
+	return nil, errors.New("recovery inspection requires macOS or Linux")
+}
