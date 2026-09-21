@@ -43,9 +43,13 @@ func (s *Server) configureShrimp(ctx context.Context) error {
 	if s.Profile.Demo || s.Profile.Driver != "sqlite" || s.Profile.UNIXSock != "" || net.ParseIP(s.Profile.Addr) == nil || !net.ParseIP(s.Profile.Addr).IsLoopback() {
 		return errors.New("experimental SHRIMP requires a non-demo SQLite instance on a loopback IP")
 	}
-	release, err := lockShrimp(filepath.Join(s.Profile.Data, "pilot.lock"))
-	if err != nil {
-		return err
+	release := func() {}
+	if !s.Profile.ShrimpDataLockHeld {
+		var err error
+		release, err = lockShrimp(filepath.Join(s.Profile.Data, "pilot.lock"))
+		if err != nil {
+			return err
+		}
 	}
 	ready := false
 	defer func() {

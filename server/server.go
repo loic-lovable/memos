@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -165,7 +166,7 @@ func (s *Server) Start() error {
 	return nil
 }
 
-func (s *Server) Shutdown(ctx context.Context) {
+func (s *Server) Shutdown(ctx context.Context) error {
 	defer s.closeShrimp()
 	ctx, cancel := context.WithTimeout(ctx, shutdownTimeout)
 	defer cancel()
@@ -173,15 +174,22 @@ func (s *Server) Shutdown(ctx context.Context) {
 	slog.Info("server shutting down")
 
 	s.closeLongLivedConnections()
-	s.shutdownHTTPServer(ctx)
+	drainErr := s.shutdownHTTPServer(ctx)
 	s.apiV1Service.CloseUploads()
 
-	// Close database connection.
-	if err := s.Store.Close(); err != nil {
-		slog.Error("failed to close database", slog.String("error", err.Error()))
+	var activeErr error
+	if s.Profile.ShrimpRecoveryGuard && s.Store.GetDriver().GetDB().Stats().InUse != 0 {
+		activeErr = errors.New("database work remains in use; recovery checkpoint refused")
 	}
-
+	closeErr := s.Store.Close()
+	if s.Profile.ShrimpRecoveryGuard && s.Store.GetDriver().GetDB().Stats().OpenConnections != 0 {
+		activeErr = errors.New("database connections remain open; recovery checkpoint refused")
+	}
+	if err := stderrors.Join(drainErr, activeErr, closeErr); err != nil {
+		return errors.Wrap(err, "shutdown incomplete")
+	}
 	slog.Info("memos stopped properly")
+	return nil
 }
 
 func (s *Server) closeLongLivedConnections() {
@@ -189,16 +197,16 @@ func (s *Server) closeLongLivedConnections() {
 	s.apiV1Service.SSEHub.Close()
 }
 
-func (s *Server) shutdownHTTPServer(ctx context.Context) {
+func (s *Server) shutdownHTTPServer(ctx context.Context) error {
 	if s.httpServer == nil {
-		return
+		return nil
 	}
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		slog.Error("failed to shutdown server", slog.String("error", err.Error()))
-		if closeErr := s.httpServer.Close(); closeErr != nil && closeErr != http.ErrServerClosed {
-			slog.Error("failed to close server", slog.String("error", closeErr.Error()))
-		}
+		closeErr := s.httpServer.Close()
+		return stderrors.Join(err, closeErr)
 	}
+	return nil
 }
 
 func (s *Server) getOrUpsertInstanceBasicSetting(ctx context.Context) (*storepb.InstanceBasicSetting, error) {

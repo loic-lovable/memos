@@ -64,6 +64,7 @@ func init() {
 	rootCmd.Flags().String("dsn", "", "database source name (DSN)")
 	rootCmd.Flags().String("instance-url", "", "canonical external URL of the Memos instance")
 	rootCmd.Flags().String("shrimp-config", "", "experimental SHRIMP configuration file (single-process SQLite)")
+	rootCmd.Flags().Bool("shrimp-recovery-enroll", false, "enroll stopped SHRIMP installation in external clean-shutdown recovery protection")
 	rootCmd.Flags().Bool("allow-private-webhooks", false, "allow webhooks to access any private/reserved IP address")
 	rootCmd.Flags().StringSlice("webhook-private-network-allowlist", nil, "private webhook destinations to allow (exact hostname, IP, or CIDR)")
 	rootCmd.Flags().String("log-level", "info", "log verbosity level (debug, info, warn, error)")
@@ -83,6 +84,7 @@ func init() {
 		"dsn",
 		"instance-url",
 		"shrimp-config",
+		"shrimp-recovery-enroll",
 		"allow-private-webhooks",
 		"webhook-private-network-allowlist",
 		"log-level",
@@ -139,6 +141,16 @@ func runServer() error {
 		return errors.Wrap(err, "failed to validate profile")
 	}
 
+	registry, err := recoveryRegistry()
+	if err != nil {
+		return errors.Wrap(err, "locate recovery registry")
+	}
+	guard, err := beginRecovery(instanceProfile, registry, viper.GetBool("shrimp-recovery-enroll"))
+	if err != nil {
+		return errors.Wrap(err, "recovery validation failed")
+	}
+	defer guard.close()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	dbDriver, err := db.NewDBDriver(instanceProfile)
@@ -183,8 +195,10 @@ func runServer() error {
 
 	printServerInfo(instanceProfile, accessSetting.AccessMode)
 	<-signals
-	s.Shutdown(context.Background())
-	return nil
+	if err := s.Shutdown(context.Background()); err != nil {
+		return err
+	}
+	return guard.seal()
 }
 
 func privateWebhookAllowlist() []string {

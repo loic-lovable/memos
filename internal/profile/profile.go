@@ -41,6 +41,10 @@ type Profile struct {
 	TrustedProxies []string
 	// ShrimpConfig enables the experimental single-process SHRIMP integration.
 	ShrimpConfig string
+	// ShrimpRecoveryGuard means the launcher holds the pre-open recovery and data locks.
+	ShrimpRecoveryGuard bool
+	// ShrimpDataLockHeld transfers pre-open SQLite locking to the launcher.
+	ShrimpDataLockHeld bool
 }
 
 func checkDataDir(dataDir string) (string, error) {
