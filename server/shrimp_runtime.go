@@ -60,6 +60,7 @@ func (s *Server) configureShrimp(ctx context.Context) error {
 	defer file.Close()
 	var config struct {
 		shrimpTestSettings
+		OperationalAuditToken     string        `json:"operational_audit_token,omitempty"`
 		Shrimp                    shrimp.Config `json:"shrimp"`
 		Certificate               string        `json:"certificate"`
 		Key                       string        `json:"key"`
@@ -82,12 +83,21 @@ func (s *Server) configureShrimp(ctx context.Context) error {
 			return err
 		}
 	}
+	if config.OperationalAuditToken != "" && len(config.OperationalAuditToken) < 32 {
+		return errors.New("operational audit credential must be randomly generated with at least 32 characters")
+	}
+	if err := config.shrimpTestSettings.validateAuditAuthority(config.OperationalAuditToken); err != nil {
+		return err
+	}
 	handler, err := shrimp.New(ctx, s.Store, config.Shrimp)
 	if err != nil {
 		return err
 	}
 	if err := config.shrimpTestSettings.configure(s, handler); err != nil {
 		return err
+	}
+	if config.OperationalAuditToken != "" {
+		s.echoServer.Any("/__shrimp/audit", echo.WrapHandler(handler.OperationalAuditHandler(config.OperationalAuditToken)))
 	}
 	s.echoServer.Any("/shrimp/*", echo.WrapHandler(handler))
 	s.echoServer.GET("/.well-known/oauth-protected-resource/*", echo.WrapHandler(handler))

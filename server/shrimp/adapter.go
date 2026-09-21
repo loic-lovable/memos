@@ -25,6 +25,8 @@ func adapterError(err error) error {
 		return sdk.ErrProofReplay
 	case errors.Is(err, store.ErrShrimpProofStorage):
 		return sdk.ErrProofStorage
+	case errors.Is(err, store.ErrShrimpHistoryCapacity):
+		return sdk.ErrCapacity
 	case errors.Is(err, store.ErrShrimpWindowQuota):
 		return sdk.ErrWindowQuota
 	}

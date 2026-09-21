@@ -55,13 +55,14 @@ func (d *DB) ConfigureShrimp(ctx context.Context, resource string) error {
 
 // ShrimpWindow persists the executable window before returning it to a client.
 func (d *DB) ShrimpWindow(ctx context.Context, principal string) (string, int64, error) {
-	id, closes := random.UUID(), time.Now().Unix()+300
+	now := time.Now().Unix()
+	id, closes := random.UUID(), now+300
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", 0, err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, "DELETE FROM shrimp_window WHERE closes_at <= ?", time.Now().Unix()); err != nil {
+	if err = collectShrimpHistory(ctx, tx, now); err != nil {
 		return "", 0, err
 	}
 	var count int
@@ -110,6 +111,11 @@ func shrimpEvent(ctx context.Context, tx *sql.Tx, s *store.ShrimpSubject, actor,
 // ApplyShrimp commits account state, source association, evidence and retry result
 // in one IMMEDIATE transaction. A retained retry never re-evaluates preconditions.
 func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.ShrimpResult, error) {
+	// Commit closure independently: a rejected mutation must not resurrect an
+	// expired execution window if the wall clock subsequently moves backwards.
+	if err := d.collectShrimpHistory(ctx, time.Now().Unix()); err != nil {
+		return nil, err
+	}
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -147,7 +153,7 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 		return nil, err
 	}
 	if count >= 10000 {
-		return nil, errors.New("pilot_history_capacity")
+		return nil, store.ErrShrimpHistoryCapacity
 	}
 	var closes int64
 	if err := tx.QueryRowContext(ctx, "SELECT closes_at FROM shrimp_window WHERE id=? AND principal=?", m.Window, m.Principal).Scan(&closes); err != nil {

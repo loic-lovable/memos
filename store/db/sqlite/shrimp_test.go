@@ -87,18 +87,19 @@ func TestShrimpSSOBindingIsAtomicAndCannotBeReassigned(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, created, retried)
 	_, err = s.CreateUserIdentity(ctx, &store.UserIdentity{UserID: identity.UserID, Provider: "another", ExternUID: "attacker"})
-	require.ErrorIs(t, err, store.ErrShrimpManagedIdentity)
-	require.ErrorIs(t, s.DeleteUserIdentities(ctx, &store.DeleteUserIdentity{ID: &identity.ID}), store.ErrShrimpManagedIdentity)
+	require.ErrorIs(t, err, store.ErrShrimpNativeAdministration)
+	require.ErrorIs(t, s.DeleteUserIdentities(ctx, &store.DeleteUserIdentity{ID: &identity.ID}), store.ErrShrimpNativeAdministration)
 	retired, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "retire", &created.Subject))
 	require.NoError(t, err)
 	require.Empty(t, retired.Error)
-	require.ErrorIs(t, s.DeleteUserIdentities(ctx, &store.DeleteUserIdentity{Provider: &intent.SSOProvider}), store.ErrShrimpManagedIdentity)
+	require.ErrorIs(t, s.DeleteUserIdentities(ctx, &store.DeleteUserIdentity{Provider: &intent.SSOProvider}), store.ErrShrimpNativeAdministration)
 	kept, err := s.GetUserIdentity(ctx, &store.FindUserIdentity{ID: &identity.ID})
 	require.NoError(t, err)
 	require.Equal(t, identity, kept, "retirement retains the SSO binding")
 
-	// A native identity already owned by another user must not be adopted.
-	native, err := s.CreateUserWithIdentity(ctx, &store.User{Username: "native", Role: store.RoleUser, PasswordHash: "unused"},
+	// Seed a pre-enrollment native identity through the driver: enrolled Store APIs
+	// intentionally prohibit native account/identity creation. It must not be adopted.
+	native, err := d.CreateUserWithIdentity(ctx, &store.User{Username: "native", Role: store.RoleUser, PasswordHash: "unused"},
 		&store.UserIdentity{Provider: "local-sso", ExternUID: "existing-subject"})
 	require.NoError(t, err)
 	collision := pilotIntent(t, d, "create_subject", nil)
@@ -112,6 +113,19 @@ func TestShrimpSSOBindingIsAtomicAndCannotBeReassigned(t *testing.T) {
 	link, err := s.GetUserIdentity(ctx, &store.FindUserIdentity{ExternUID: &collision.SourceReference})
 	require.NoError(t, err)
 	require.Equal(t, native.ID, link.UserID)
+
+	// Native deletion removes the login linkage, but must never make a retired
+	// provisioning identity available for attachment to an unmanaged account.
+	_, err = s.DeleteUser(ctx, &store.DeleteUser{ID: retired.Subject.UserID})
+	require.NoError(t, err)
+	deletedLink, err := s.GetUserIdentity(ctx, &store.FindUserIdentity{ID: &identity.ID})
+	require.NoError(t, err)
+	require.Nil(t, deletedLink)
+	_, err = s.CreateUserIdentity(ctx, &store.UserIdentity{UserID: native.ID, Provider: intent.SSOProvider, ExternUID: intent.SourceReference})
+	require.ErrorIs(t, err, store.ErrShrimpNativeAdministration)
+	retained, _, err := d.ReadShrimp(ctx, retired.Subject.ID, nil)
+	require.NoError(t, err)
+	require.Equal(t, "retired", retained.Lifecycle)
 }
 
 func TestApplyShrimpCompetingRevisionsAndNativeOwnership(t *testing.T) {

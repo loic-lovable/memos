@@ -32,14 +32,16 @@ type ShrimpAudit struct {
 
 // ShrimpAuditPage contains an append-ordered slice and the current retained coverage.
 type ShrimpAuditPage struct {
-	Events     []ShrimpAudit `json:"events"`
-	Epoch      string        `json:"epoch"`
-	Since      int64         `json:"retained_since"`
-	Boundary   int64         `json:"boundary"`
-	Next       int64         `json:"next"`
-	More       bool          `json:"more"`
-	Unresolved int64         `json:"unresolved_attempts"`
-	LegacyGap  bool          `json:"history_before_audit"`
+	Events           []ShrimpAudit `json:"events"`
+	Epoch            string        `json:"epoch"`
+	Since            int64         `json:"retained_since"`
+	Boundary         int64         `json:"boundary"`
+	Next             int64         `json:"next"`
+	More             bool          `json:"more"`
+	Unresolved       int64         `json:"unresolved_attempts"`
+	LegacyGap        bool          `json:"history_before_audit"`
+	RetainedResults  int64         `json:"retained_operation_results"`
+	RetainedAttempts int64         `json:"retained_attempts"`
 }
 
 // ShrimpAuditDriver is separate from the portable protocol interface.

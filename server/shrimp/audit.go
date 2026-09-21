@@ -8,13 +8,13 @@ import (
 	"github.com/usememos/memos/store"
 )
 
-// OperationalAuditHandler is only mounted by the loopback pilot launcher. Its
+// OperationalAuditHandler is explicitly enabled on the loopback application. Its
 // independently generated secret permits a fixed redacted resource-wide view;
 // provisioning credentials and the fault-control credential confer no access.
 func (h *Handler) OperationalAuditHandler(secret string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		if r.TLS == nil || len(secret) < 32 || subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+secret)) != 1 {
+		if r.TLS == nil || len(r.Header.Values("Authorization")) != 1 || len(secret) < 32 || subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+secret)) != 1 {
 			h.problem(w, 401, "audit_authority_required", "authorization")
 			return
 		}
@@ -60,8 +60,8 @@ func (h *Handler) OperationalAuditHandler(secret string) http.Handler {
 				"complete":              false,
 				"surface":               "authenticated SHRIMP mutation submissions and native UpdateUser/DeleteUser calls in this pilot",
 				"restrictions":          []string{"no unauthenticated traffic or ordinary reads", "no native signup, settings, binding or trust administration", "no backup restoration continuity", "no raw values, credentials, request bodies or receipts"},
-				"min_retention_seconds": 604800, "collection": "none during the retained pilot deployment",
-				"max_attempts": 100000, "publication": "synchronous local SQLite journal; unresolved attempts remain visible",
+				"min_retention_seconds": 604800, "collection": "settled attempts older than seven days may be collected at capacity; unresolved and retained-result references are preserved",
+				"max_attempts": 100000, "max_operation_results": 10000, "publication": "synchronous local SQLite journal; unresolved attempts remain visible",
 			},
 		})
 	})

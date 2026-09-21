@@ -23,7 +23,9 @@ type Application interface {
 	// be unambiguous across those namespaces; the handler checks the requested kind.
 	Read(context.Context, string, []string) (*Subject, string, error)
 	// Enumerate uses one coherent observation for candidate prefixes passed to fits.
-	// It must durably preserve retry pages and bind cursors to the entire selection.
+	// It must retain continuation state through expiry and bind the entire selection.
+	// Retrying a cursor starts at its original position, observing current records;
+	// it may replace the page and successor but must not extend the traversal lease.
 	Enumerate(context.Context, Enumeration, func(*EnumerationPage) (bool, error)) (*EnumerationPage, error)
 	// ConsumeProof atomically refuses duplicate proof identifiers until expiry.
 	ConsumeProof(context.Context, string, int64) error
@@ -45,6 +47,8 @@ var (
 	ErrProofReplay  = errors.New("proof already consumed")
 	ErrProofStorage = errors.New("proof replay storage unavailable")
 	ErrWindowQuota  = errors.New("replay_window_quota")
+	// ErrCapacity refuses new work without changing an existing operation result.
+	ErrCapacity = errors.New("retained operation capacity")
 )
 
 // Subject is protocol identity without an application's native account identifier.

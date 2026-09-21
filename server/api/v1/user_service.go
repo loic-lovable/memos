@@ -524,6 +524,8 @@ const emailTakenMessage = "email is already in use"
 // AlreadyExists and everything else onto Internal with the given context.
 func convertUserWriteError(err error, context string) error {
 	switch {
+	case stderrors.Is(err, store.ErrShrimpNativeAdministration):
+		return status.Error(codes.PermissionDenied, err.Error())
 	case stderrors.Is(err, store.ErrShrimpManagedWrite):
 		return status.Error(codes.FailedPrecondition, err.Error())
 	case stderrors.Is(err, store.ErrEmailTaken):

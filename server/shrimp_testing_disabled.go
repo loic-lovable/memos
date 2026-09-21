@@ -18,3 +18,5 @@ func (*shrimpTestSettings) configure(*Server, *shrimp.Handler) error { return ni
 func (*shrimpTestSettings) register(*apiv1.APIV1Service) {}
 
 func (*shrimpTestSettings) wrap(next http.Handler) http.Handler { return next }
+
+func (*shrimpTestSettings) validateAuditAuthority(string) error { return nil }

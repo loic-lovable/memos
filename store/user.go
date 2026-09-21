@@ -107,6 +107,9 @@ func normalizeUserEmail(email string) (string, error) {
 }
 
 func (s *Store) CreateUser(ctx context.Context, create *User) (*User, error) {
+	if s.shrimpPilot {
+		return nil, ErrShrimpNativeAdministration
+	}
 	email, err := normalizeUserEmail(create.Email)
 	if err != nil {
 		return nil, err

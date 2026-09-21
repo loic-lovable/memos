@@ -54,6 +54,9 @@ func (s *Store) UpsertInstanceGeneralSettingSafely(ctx context.Context, setting 
 
 // DeleteIdentityProviderSafely validates and deletes an IdP as one serialized operation.
 func (s *Store) DeleteIdentityProviderSafely(ctx context.Context, delete *DeleteIdentityProvider) error {
+	if s.shrimpPilot {
+		return ErrShrimpNativeAdministration
+	}
 	if delete == nil {
 		return errors.New("identity provider deletion is required")
 	}

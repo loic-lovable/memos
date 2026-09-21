@@ -57,7 +57,7 @@ func New(ctx context.Context, s *store.Store, config Config) (*Handler, error) {
 		SchemaDirectory: config.SchemaDirectory, AllowWrite: config.AllowWrite,
 		Tenant: "acme", Domain: "A", HistoryEpoch: "memos-pilot-1", DiscoveryRevision: "memos-pilot-3",
 		AdmissionConsumer: "memos-session-refresh-pat",
-		HealthyConditions: "Disposable single-process SQLite pilot with at most 10000 retained operations. Only listed operations, one human command per mutation, source reference plus displayName required on creation; displayName-only updates. No complete profile, public audit, sync, existing-session revocation, backup restore, or multi-process admission guarantee.",
+		HealthyConditions: "Disposable single-process SQLite pilot with at most 10000 unexpired retained operation results. Only listed operations, one human command per mutation, source reference plus displayName required on creation; displayName-only updates. No complete profile, public audit, sync, existing-session revocation, backup restore, or multi-process admission guarantee.",
 	})
 	if err != nil {
 		return nil, err
@@ -78,8 +78,8 @@ func New(ctx context.Context, s *store.Store, config Config) (*Handler, error) {
 	return h, nil
 }
 
-// The operational audit view is application-specific and is mounted only by the
-// tagged test runtime; these helpers do not implement provisioning routes.
+// The operational audit view is application-specific and has separate read-only
+// authority; these helpers do not implement provisioning routes.
 func (h *Handler) scope() map[string]any {
 	return map[string]any{"resource": h.config.Resource, "tenant": "acme", "domain": "A", "schema_version": "0.2", "history_epoch": "memos-pilot-1", "authorization_context": h.config.Authority}
 }

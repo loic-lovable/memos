@@ -12,8 +12,9 @@ import (
 	"github.com/usememos/memos/store"
 )
 
-// Each admitted attempt reserves up to six journal rows. There is no TTL/eviction:
-// accepted work can always append its bounded outcome even when admission is full.
+// Each admitted attempt reserves up to six journal rows. At capacity, only
+// settled evidence past retention can be collected; unresolved work stays visible.
+// Accepted work can always append its bounded outcome when admission is full.
 const shrimpAuditMaxAttempts = 100000
 
 func (d *DB) configureShrimpAudit(ctx context.Context) error {
@@ -49,7 +50,20 @@ func (d *DB) BeginShrimpAudit(ctx context.Context, actor, authority, action stri
 		return nil, err
 	}
 	if count >= shrimpAuditMaxAttempts {
-		return nil, errors.New("audit_capacity")
+		// Audit admission precedes Apply: expired results must not pin all slots
+		// and prevent the very request that would otherwise collect them.
+		if err := collectShrimpHistory(ctx, tx, time.Now().Unix()); err != nil {
+			return nil, err
+		}
+		if err := collectShrimpAudit(ctx, tx, time.Now().Unix()); err != nil {
+			return nil, err
+		}
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM shrimp_audit_attempt").Scan(&count); err != nil {
+			return nil, err
+		}
+		if count >= shrimpAuditMaxAttempts {
+			return nil, errors.New("audit_capacity")
+		}
 	}
 	event := &store.ShrimpAudit{AttemptID: random.UUID(), Actor: actor, Authority: authority, Action: action, Kind: "attempt", Commit: "unknown", OccurredAt: time.Now().Unix()}
 	if _, err := tx.ExecContext(ctx, "INSERT INTO shrimp_audit_attempt(id) VALUES(?)", event.AttemptID); err != nil {
@@ -174,6 +188,12 @@ func (d *DB) InspectShrimpAudit(ctx context.Context, epoch string, after int64, 
 	defer tx.Rollback()
 	page := &store.ShrimpAuditPage{Events: []store.ShrimpAudit{}, Next: after}
 	if err := tx.QueryRowContext(ctx, "SELECT epoch,since,legacy_gap FROM shrimp_audit_state WHERE id=1").Scan(&page.Epoch, &page.Since, &page.LegacyGap); err != nil {
+		return nil, err
+	}
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM shrimp_operation").Scan(&page.RetainedResults); err != nil {
+		return nil, err
+	}
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM shrimp_audit_attempt").Scan(&page.RetainedAttempts); err != nil {
 		return nil, err
 	}
 	if epoch != "" && epoch != page.Epoch {

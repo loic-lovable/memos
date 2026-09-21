@@ -72,6 +72,7 @@ func TestApplicationOwnsAtomicMutationAndAuditPublication(t *testing.T) {
 		{name: "begin_failure", begin: errors.New("private"), wantEvents: []string{"begin"}, status: 503},
 		{name: "identify_failure", identify: errors.New("private"), wantEvents: []string{"begin", "identify", "finish"}, status: 503},
 		{name: "unknown_storage_outcome", apply: errors.New("private"), wantEvents: []string{"begin", "identify", "apply", "finish"}, status: 503},
+		{name: "capacity", apply: fmt.Errorf("private: %w", ErrCapacity), wantEvents: []string{"begin", "identify", "apply", "finish"}, status: 429, commit: "not_committed"},
 		{name: "known_rejection", apply: errors.New("replay_conflict"), wantEvents: []string{"begin", "identify", "apply", "finish"}, status: 409, commit: "not_committed"},
 		{name: "publication_failure", finish: errors.New("private"), wantEvents: []string{"begin", "identify", "apply", "finish"}, status: 503},
 	} {
@@ -90,6 +91,9 @@ func TestApplicationOwnsAtomicMutationAndAuditPublication(t *testing.T) {
 			require.Equal(t, tc.status, w.Code)
 			require.Equal(t, tc.commit, app.outcome.Commit)
 			require.NotContains(t, w.Body.String(), "private")
+			if tc.status == 429 {
+				assertBoundedRetry(t, w, 429, "throttled", "acceptance")
+			}
 			if tc.status == 200 {
 				require.Equal(t, "operation", app.mutation.ID)
 				require.Equal(t, "old", app.mutation.ExpectedRevision)

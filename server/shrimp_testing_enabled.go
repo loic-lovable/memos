@@ -53,3 +53,11 @@ func (t *shrimpTestSettings) wrap(next http.Handler) http.Handler {
 	}
 	return next
 }
+
+// validateAuditAuthority keeps operational inspection separate from fault control.
+func (t *shrimpTestSettings) validateAuditAuthority(token string) error {
+	if t.Test != nil && token != "" && token == t.Test.ControlToken {
+		return errors.New("operational audit credential must differ from fault-control credential")
+	}
+	return nil
+}

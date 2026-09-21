@@ -35,6 +35,9 @@ type DeleteIdentityProvider struct {
 }
 
 func (s *Store) CreateIdentityProvider(ctx context.Context, create *storepb.IdentityProvider) (*storepb.IdentityProvider, error) {
+	if s.shrimpPilot {
+		return nil, ErrShrimpNativeAdministration
+	}
 	raw, err := convertIdentityProviderToRaw(create)
 	if err != nil {
 		return nil, err
@@ -150,6 +153,9 @@ type UpdateIdentityProviderV1 struct {
 }
 
 func (s *Store) UpdateIdentityProvider(ctx context.Context, update *UpdateIdentityProviderV1) (*storepb.IdentityProvider, error) {
+	if s.shrimpPilot {
+		return nil, ErrShrimpNativeAdministration
+	}
 	updateRaw := &UpdateIdentityProvider{
 		ID: update.ID,
 	}
@@ -179,6 +185,9 @@ func (s *Store) UpdateIdentityProvider(ctx context.Context, update *UpdateIdenti
 }
 
 func (s *Store) DeleteIdentityProvider(ctx context.Context, delete *DeleteIdentityProvider) error {
+	if s.shrimpPilot {
+		return ErrShrimpNativeAdministration
+	}
 	err := s.driver.DeleteIdentityProvider(ctx, delete)
 	if err != nil {
 		return err

@@ -37,6 +37,10 @@ func (s *APIV1Service) resolveSSOUser(ctx context.Context, currentUser *store.Us
 		return user, nil
 	}
 
+	if s.Store.ShrimpPilotEnabled() {
+		return nil, status.Error(codes.PermissionDenied, store.ErrShrimpNativeAdministration.Error())
+	}
+
 	if currentUser != nil {
 		return s.bindSSOIdentityToUser(ctx, currentUser, provider, externUID)
 	}
@@ -277,7 +281,7 @@ func (s *APIV1Service) bindSSOIdentityToUser(ctx context.Context, currentUser *s
 		Provider:  provider,
 		ExternUID: externUID,
 	}); err != nil {
-		if errors.Is(err, store.ErrShrimpManagedIdentity) {
+		if errors.Is(err, store.ErrShrimpManagedIdentity) || errors.Is(err, store.ErrShrimpNativeAdministration) {
 			return nil, status.Errorf(codes.PermissionDenied, "%v", err)
 		}
 		if errors.Is(err, store.ErrUserIdentityTaken) {

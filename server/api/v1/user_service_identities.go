@@ -38,6 +38,9 @@ func (s *APIV1Service) ListLinkedIdentities(ctx context.Context, request *v1pb.L
 }
 
 func (s *APIV1Service) CreateLinkedIdentity(ctx context.Context, request *v1pb.CreateLinkedIdentityRequest) (*v1pb.LinkedIdentity, error) {
+	if s.Store.ShrimpPilotEnabled() {
+		return nil, status.Error(codes.PermissionDenied, store.ErrShrimpNativeAdministration.Error())
+	}
 	user, err := s.resolveUserFromName(ctx, request.Parent)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid parent: %v", err)
@@ -105,6 +108,9 @@ func (s *APIV1Service) GetLinkedIdentity(ctx context.Context, request *v1pb.GetL
 }
 
 func (s *APIV1Service) DeleteLinkedIdentity(ctx context.Context, request *v1pb.DeleteLinkedIdentityRequest) (*emptypb.Empty, error) {
+	if s.Store.ShrimpPilotEnabled() {
+		return nil, status.Error(codes.PermissionDenied, store.ErrShrimpNativeAdministration.Error())
+	}
 	user, provider, err := s.resolveUserAndLinkedIdentityProviderFromName(ctx, request.Name)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid linked identity name: %v", err)

@@ -32,6 +32,9 @@ func TestPrivateAuthenticationObservation(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, s.Close()) })
 	ctx := t.Context()
 	require.NoError(t, s.Migrate(ctx))
+	// The unrelated account predates enrollment; native creation is frozen afterward.
+	other, err := s.CreateUser(ctx, &store.User{Username: "other", Role: store.RoleUser, RowStatus: store.Archived})
+	require.NoError(t, err)
 	require.NoError(t, s.EnableShrimpPilot(ctx, "https://pilot.example/shrimp/v1/tenants/acme/domains/A"))
 	window, deadline, err := d.(store.ShrimpDriver).ShrimpWindow(ctx, "hr")
 	require.NoError(t, err)
@@ -40,8 +43,6 @@ func TestPrivateAuthenticationObservation(t *testing.T) {
 	user, err := s.GetUser(ctx, &store.FindUser{ID: &created.Subject.UserID})
 	require.NoError(t, err)
 	require.Equal(t, store.Archived, user.RowStatus)
-	other, err := s.CreateUser(ctx, &store.User{Username: "other", Role: store.RoleUser, RowStatus: store.Archived})
-	require.NoError(t, err)
 	secret := "private-test-signing-secret"
 	valid, _, err := auth.GenerateAccessTokenV2(user.ID, user.Username, "USER", "NORMAL", []byte(secret))
 	require.NoError(t, err)

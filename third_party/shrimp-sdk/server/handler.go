@@ -370,6 +370,10 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 	}
 	result, err := h.driver.Apply(r.Context(), m)
 	if err != nil {
+		if errors.Is(err, ErrCapacity) {
+			h.throttled(w, "acceptance")
+			return
+		}
 		code := "storage_unavailable"
 		status := 503
 		stage := "commit"

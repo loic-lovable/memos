@@ -9,6 +9,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ErrShrimpNativeAdministration rejects unreviewed native identity administration in enrolled deployments.
+var ErrShrimpNativeAdministration = errors.New("native account creation and identity administration are unavailable in the SHRIMP pilot")
+
+// ErrShrimpHistoryCapacity means retained history cannot accept more work safely.
+var ErrShrimpHistoryCapacity = errors.New("pilot_history_capacity")
+
 // ErrShrimpManagedWrite rejects native changes to source-owned lifecycle facts.
 var ErrShrimpManagedWrite = errors.New("managed lifecycle and display name require SHRIMP authority; retire before native deletion")
 
