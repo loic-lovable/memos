@@ -18,7 +18,6 @@ import (
 )
 
 var errShrimpConflict = errors.New("mutation_rejected")
-var errShrimpDependency = errors.New("invalid_dependency")
 
 const shrimpColumns = "id, user_id, source_id, source_revision, source_reference, revision, lifecycle, display_name, attributes"
 
@@ -100,7 +99,7 @@ func shrimpDependencies(ctx context.Context, q rowQuerier, dependencies []string
 			return err
 		}
 		if exists != 1 {
-			return errShrimpDependency
+			return store.ErrShrimpInvalidDependency
 		}
 	}
 	return nil
@@ -130,7 +129,7 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 	err = tx.QueryRowContext(ctx, "SELECT fingerprint,result FROM shrimp_operation WHERE principal=? AND window_id=? AND id=?", m.Principal, m.Window, m.ID).Scan(&oldHash, &oldResult)
 	if err == nil {
 		if oldHash != m.Fingerprint {
-			return nil, errors.New("replay_conflict")
+			return nil, store.ErrShrimpReplayConflict
 		}
 		result, err := store.DecodeShrimpResult(oldResult)
 		if err != nil {
@@ -148,10 +147,10 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 		return nil, err
 	}
 	if m.UnsupportedProfiles {
-		return nil, errors.New("unsupported_profile")
+		return nil, store.ErrShrimpUnsupportedProfile
 	}
 	if m.RecoverOnly {
-		return nil, errors.New("insufficient_scope")
+		return nil, store.ErrShrimpInsufficientScope
 	}
 	var count int
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM shrimp_operation").Scan(&count); err != nil {
@@ -163,13 +162,13 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 	var closes int64
 	if err := tx.QueryRowContext(ctx, "SELECT closes_at FROM shrimp_window WHERE id=? AND principal=?", m.Window, m.Principal).Scan(&closes); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.New("operation_result_unavailable")
+			return nil, store.ErrShrimpOperationResultUnavailable
 		}
 		return nil, err
 	}
 	now := time.Now().Unix()
 	if now >= closes {
-		return nil, errors.New("operation_result_unavailable")
+		return nil, store.ErrShrimpOperationResultUnavailable
 	}
 	result := &store.ShrimpResult{Time: now, RetainedUntil: max(closes, now) + 86400, Action: m.Action, CommandID: m.CommandID}
 	if m.Deadline <= now || m.Deadline > closes {
@@ -177,7 +176,7 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 	}
 	if result.Error == "" {
 		if err := shrimpDependencies(ctx, tx, m.Dependencies); err != nil {
-			if !errors.Is(err, errShrimpDependency) {
+			if !errors.Is(err, store.ErrShrimpInvalidDependency) {
 				return nil, err
 			}
 			result.Error = "invalid_dependency"
@@ -214,7 +213,7 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 	}
 	// Recheck after preparation, before the journal and business state commit.
 	if result.Error == "" && time.Now().Unix() >= m.Deadline {
-		return nil, errors.New("execution_deadline_expired")
+		return nil, store.ErrShrimpExecutionDeadlineExpired
 	}
 	result.Time = time.Now().Unix()
 	result.RetainedUntil = max(closes, result.Time) + 86400
@@ -233,7 +232,7 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 	}
 	store.ShrimpCheckpoint(ctx, "before_commit")
 	if result.Error == "" && time.Now().Unix() >= m.Deadline {
-		return nil, errors.New("execution_deadline_expired")
+		return nil, store.ErrShrimpExecutionDeadlineExpired
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err

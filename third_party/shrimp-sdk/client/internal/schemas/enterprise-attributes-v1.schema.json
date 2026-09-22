@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.2/enterprise-attributes-v1.schema.json",
+  "title": "SHRIMP enterprise attributes v1",
+  "$comment": "Optional human subject extension. This grammar does not establish enrolled immutable context identifiers, fresh never-reused selection generations, context-scoped delegation, field ownership, administrative approval, authorization, replay safety or runtime support.",
+  "$defs": {
+    "attributes": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "employeeNumber": {
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1
+        },
+        "costCenter": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "organization": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "division": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "facts": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "value",
+            "authority",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        "employeeNumber": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024,
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "value",
+            "authority",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        "costCenter": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "value",
+            "authority",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        "organization": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "value",
+            "authority",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        "division": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "value",
+            "authority",
+            "revision"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "context_selection": {
+      "type": "object",
+      "properties": {
+        "employer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "issuer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "employer",
+        "issuer"
+      ],
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "employer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "issuer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "generation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "employer",
+        "issuer",
+        "generation"
+      ],
+      "additionalProperties": false
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "profile": {
+          "const": "enterprise-attributes-v1"
+        },
+        "context": {
+          "$ref": "enterprise-attributes-v1.schema.json#/$defs/context"
+        },
+        "attributes": {
+          "$ref": "enterprise-attributes-v1.schema.json#/$defs/facts"
+        }
+      },
+      "required": [
+        "profile",
+        "context",
+        "attributes"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

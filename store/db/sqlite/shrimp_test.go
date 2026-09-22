@@ -56,7 +56,7 @@ func TestApplyShrimpAtomicCreationAndRetry(t *testing.T) {
 	changed := m
 	changed.Fingerprint = "changed"
 	_, err = s.ApplyShrimp(ctx, changed)
-	require.ErrorContains(t, err, "replay_conflict")
+	require.ErrorIs(t, err, store.ErrShrimpReplayConflict)
 	duplicate := pilotIntent(t, d, "create_subject", nil)
 	duplicate.SourceReference = m.SourceReference
 	failed, err := s.ApplyShrimp(ctx, duplicate)
@@ -68,6 +68,47 @@ func TestApplyShrimpAtomicCreationAndRetry(t *testing.T) {
 	recovered, err := d.ShrimpResult(ctx, duplicate.Principal, duplicate.Window, duplicate.ID)
 	require.NoError(t, err)
 	require.Equal(t, failed, recovered)
+}
+
+func TestShrimpRequestFailuresPreserveRetainedOutcome(t *testing.T) {
+	s, d := pilotStore(t)
+	ctx := t.Context()
+	original := pilotIntent(t, d, "create_subject", nil)
+	created, err := s.ApplyShrimp(ctx, original)
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name string
+		set  func(*store.ShrimpMutation)
+		want error
+	}{
+		{"unsupported profile", func(m *store.ShrimpMutation) { m.UnsupportedProfiles = true }, store.ErrShrimpUnsupportedProfile},
+		{"recovery only", func(m *store.ShrimpMutation) { m.RecoverOnly = true }, store.ErrShrimpInsufficientScope},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			newWork := pilotIntent(t, d, "create_subject", nil)
+			tc.set(&newWork)
+			_, err := s.ApplyShrimp(ctx, newWork)
+			require.ErrorIs(t, err, tc.want)
+			retry := original
+			tc.set(&retry)
+			recovered, err := s.ApplyShrimp(ctx, retry)
+			require.NoError(t, err)
+			require.Equal(t, created, recovered, "retained recovery precedes new-work rejection")
+		})
+	}
+	_, _, err = d.ReadShrimp(ctx, created.Subject.ID, []string{"missing-token"})
+	require.ErrorIs(t, err, store.ErrShrimpInvalidDependency)
+	intent := pilotIntent(t, d, "disable", &created.Subject)
+	intent.Dependencies = []string{"missing-token"}
+	rejected, err := s.ApplyShrimp(ctx, intent)
+	require.NoError(t, err, "a retained rejection is a result, not a transport error")
+	require.Equal(t, "invalid_dependency", rejected.Error)
+	replayed, err := s.ApplyShrimp(ctx, intent)
+	require.NoError(t, err)
+	require.Equal(t, rejected, replayed)
+	var count int
+	require.NoError(t, d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM user").Scan(&count))
+	require.Equal(t, 1, count)
 }
 
 func TestShrimpSSOBindingIsAtomicAndCannotBeReassigned(t *testing.T) {

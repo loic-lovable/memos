@@ -2202,7 +2202,12 @@
                 "name",
                 "emails",
                 "locale",
-                "timezone"
+                "timezone",
+                "enterprise.title",
+                "enterprise.employeeNumber",
+                "enterprise.costCenter",
+                "enterprise.organization",
+                "enterprise.division"
               ]
             },
             {
@@ -2219,6 +2224,9 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1024
+        },
+        "expected_context": {
+          "$ref": "enterprise-attributes-v1.schema.json#/$defs/context"
         }
       },
       "required": [
@@ -2230,7 +2238,45 @@
         "new_authority",
         "authorization"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "field": {
+                "enum": [
+                  "enterprise.title",
+                  "enterprise.employeeNumber",
+                  "enterprise.costCenter",
+                  "enterprise.organization",
+                  "enterprise.division"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "expected_context"
+            ],
+            "properties": {
+              "resource": {
+                "properties": {
+                  "type": {
+                    "const": "subject"
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "expected_context"
+              ]
+            }
+          }
+        }
+      ]
     },
     "command": {
       "oneOf": [
@@ -2329,6 +2375,12 @@
         },
         {
           "$ref": "mutation-v0.2.schema.json#/$defs/withdraw_email_verification"
+        },
+        {
+          "$ref": "mutation-v0.2.schema.json#/$defs/set_enterprise_context"
+        },
+        {
+          "$ref": "mutation-v0.2.schema.json#/$defs/update_enterprise_attributes"
         }
       ]
     },
@@ -2717,6 +2769,306 @@
         "expected_revision"
       ],
       "additionalProperties": false
+    },
+    "set_enterprise_context": {
+      "type": "object",
+      "properties": {
+        "command_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "action": {
+          "const": "set_enterprise_context"
+        },
+        "resource": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "subject"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "expected_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "expected_context": {
+          "anyOf": [
+            {
+              "$ref": "enterprise-attributes-v1.schema.json#/$defs/context"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "enterprise-attributes-v1.schema.json#/$defs/context_selection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attributes": {
+          "$ref": "enterprise-attributes-v1.schema.json#/$defs/attributes"
+        },
+        "authorization": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "command_id",
+        "action",
+        "resource",
+        "expected_revision",
+        "expected_context",
+        "context",
+        "attributes",
+        "authorization"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "context": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "attributes": {
+                "maxProperties": 0
+              }
+            }
+          }
+        },
+        {
+          "not": {
+            "properties": {
+              "expected_context": {
+                "type": "null"
+              },
+              "context": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "update_enterprise_attributes": {
+      "type": "object",
+      "properties": {
+        "command_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "action": {
+          "const": "update_enterprise_attributes"
+        },
+        "resource": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "subject"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "expected_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "expected_context": {
+          "$ref": "enterprise-attributes-v1.schema.json#/$defs/context"
+        },
+        "set": {
+          "$ref": "enterprise-attributes-v1.schema.json#/$defs/attributes"
+        },
+        "clear": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "title",
+              "employeeNumber",
+              "costCenter",
+              "organization",
+              "division"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "command_id",
+        "action",
+        "resource",
+        "expected_revision",
+        "expected_context",
+        "set",
+        "clear"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "properties": {
+                "set": {
+                  "minProperties": 1
+                }
+              }
+            },
+            {
+              "properties": {
+                "clear": {
+                  "minItems": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "if": {
+            "properties": {
+              "set": {
+                "required": [
+                  "title"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clear": {
+                "not": {
+                  "contains": {
+                    "const": "title"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "set": {
+                "required": [
+                  "employeeNumber"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clear": {
+                "not": {
+                  "contains": {
+                    "const": "employeeNumber"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "set": {
+                "required": [
+                  "costCenter"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clear": {
+                "not": {
+                  "contains": {
+                    "const": "costCenter"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "set": {
+                "required": [
+                  "organization"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clear": {
+                "not": {
+                  "contains": {
+                    "const": "organization"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "set": {
+                "required": [
+                  "division"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clear": {
+                "not": {
+                  "contains": {
+                    "const": "division"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

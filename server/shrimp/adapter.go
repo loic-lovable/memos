@@ -3,6 +3,7 @@ package shrimp
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	sdk "github.com/lovablelabs/shrimp-protocol/sdk/go/server"
 	"github.com/pkg/errors"
@@ -29,6 +30,20 @@ func adapterError(err error) error {
 		return sdk.ErrCapacity
 	case errors.Is(err, store.ErrShrimpWindowQuota):
 		return sdk.ErrWindowQuota
+	}
+	for _, mapping := range []struct{ native, sdk error }{
+		{store.ErrShrimpReplayConflict, sdk.ErrReplayConflict},
+		{store.ErrShrimpOperationResultUnavailable, sdk.ErrOperationResultUnavailable},
+		{store.ErrShrimpUnsupportedProfile, sdk.ErrUnsupportedProfile},
+		{store.ErrShrimpInsufficientScope, sdk.ErrInsufficientScope},
+		{store.ErrShrimpExecutionDeadlineExpired, sdk.ErrExecutionDeadlineExpired},
+		{store.ErrShrimpInvalidDependency, sdk.ErrInvalidDependency},
+	} {
+		if errors.Is(err, mapping.native) {
+			// Preserve native context for internal diagnostics. The SDK emits only
+			// its bounded public category, never this wrapped error text.
+			return fmt.Errorf("%w: %w", mapping.sdk, err)
+		}
 	}
 	var enumeration store.ShrimpEnumerationError
 	if errors.As(err, &enumeration) {

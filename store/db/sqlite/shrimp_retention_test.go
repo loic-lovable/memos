@@ -38,7 +38,7 @@ func TestShrimpRetentionBoundaryAndRestart(t *testing.T) {
 	reopened := driver.(*DB)
 	t.Cleanup(func() { require.NoError(t, reopened.Close()) })
 	_, err = reopened.ApplyShrimp(ctx, intent)
-	require.ErrorContains(t, err, "operation_result_unavailable")
+	require.ErrorIs(t, err, store.ErrShrimpOperationResultUnavailable)
 	for table, expected := range map[string]int{"user": 1, "shrimp_subject": 1, "shrimp_event": originalEvents} {
 		var count int
 		require.NoError(t, reopened.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count))
@@ -109,7 +109,7 @@ func TestShrimpWindowCollectsExpiredResults(t *testing.T) {
 	_, err = d.ShrimpResult(ctx, intent.Principal, intent.Window, intent.ID)
 	require.ErrorIs(t, err, sql.ErrNoRows)
 	_, err = s.ApplyShrimp(ctx, intent)
-	require.ErrorContains(t, err, "operation_result_unavailable")
+	require.ErrorIs(t, err, store.ErrShrimpOperationResultUnavailable)
 }
 
 func TestShrimpRejectedReplayCommitsWindowClosure(t *testing.T) {
@@ -124,7 +124,7 @@ func TestShrimpRejectedReplayCommitsWindowClosure(t *testing.T) {
 	_, err = d.db.ExecContext(ctx, "UPDATE shrimp_operation SET retained_until=?", past)
 	require.NoError(t, err)
 	_, err = s.ApplyShrimp(ctx, intent)
-	require.ErrorContains(t, err, "operation_result_unavailable")
+	require.ErrorIs(t, err, store.ErrShrimpOperationResultUnavailable)
 	var count int
 	require.NoError(t, d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM shrimp_window").Scan(&count))
 	require.Zero(t, count, "mutation rejection must not roll back permanent window closure")

@@ -175,7 +175,7 @@ func (d *DB) EnumerateShrimp(ctx context.Context, request store.ShrimpEnumeratio
 			}
 		}
 	} else if err := shrimpDependencies(ctx, tx, request.Dependencies); err != nil {
-		if errors.Is(err, errShrimpDependency) {
+		if errors.Is(err, store.ErrShrimpInvalidDependency) {
 			return nil, store.ShrimpEnumerationError("invalid_dependency")
 		}
 		return nil, err

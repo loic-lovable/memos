@@ -78,7 +78,9 @@ func New(ctx context.Context, app Application, config Config) (*Handler, error) 
 	if err != nil {
 		return nil, err
 	}
-	paths = append(paths, filepath.Join(config.SchemaDirectory, "human-attributes-v1.schema.json"))
+	for _, name := range []string{"human-attributes-v1.schema.json", "enterprise-attributes-v1.schema.json"} {
+		paths = append(paths, filepath.Join(config.SchemaDirectory, name))
+	}
 	catalog := map[string]*jsonschema.Schema{}
 	entries := []any{}
 	for _, path := range paths {
@@ -345,10 +347,26 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		// after retained intent equality and authorized outcome recovery.
 		m.UnsupportedProfiles = true
 	}
+	field, _ := command["field"].(string)
+	enterpriseCommand := m.Action == "set_enterprise_context" || m.Action == "update_enterprise_attributes" ||
+		(m.Action == "transfer_authority" && strings.HasPrefix(field, "enterprise."))
+	if enterpriseCommand {
+		m.UnsupportedProfiles = true
+	}
 	for _, token := range body["required_dependencies"].([]any) {
 		m.Dependencies = append(m.Dependencies, token.(string))
 	}
 	switch m.Action {
+	case "set_enterprise_context", "update_enterprise_attributes", "transfer_authority":
+		if !enterpriseCommand {
+			h.problem(w, 400, "unsupported_command", "acceptance")
+			return
+		}
+		// Carry only the rejection marker and subject reference to Apply. The app
+		// checks retained intent first; this is not enterprise mutation support.
+		resource := command["resource"].(map[string]any)
+		m.SubjectID = resource["id"].(string)
+		m.ExpectedRevision = command["expected_revision"].(string)
 	case "create_subject":
 		attributes := command["attributes"].(map[string]any)
 		source, ok := command["source_reference"].(string)
@@ -395,6 +413,7 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 	}
 	result, err := h.driver.Apply(r.Context(), m)
 	if err != nil {
+		err = legacyApplicationError(err)
 		if errors.Is(err, ErrCapacity) {
 			h.throttled(w, "acceptance")
 			return
@@ -402,27 +421,27 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		code := "storage_unavailable"
 		status := 503
 		stage := "commit"
-		switch err.Error() {
-		case "replay_conflict":
-			code = err.Error()
+		switch {
+		case errors.Is(err, ErrReplayConflict):
+			code = "replay_conflict"
 			status = 409
-		case "operation_result_unavailable":
-			code = err.Error()
+		case errors.Is(err, ErrOperationResultUnavailable):
+			code = "operation_result_unavailable"
 			status = 410
 			stage = "recovery"
-		case "unsupported_profile":
-			code = err.Error()
+		case errors.Is(err, ErrUnsupportedProfile):
+			code = "unsupported_profile"
 			status = 400
 			stage = "acceptance"
-		case "insufficient_scope":
+		case errors.Is(err, ErrInsufficientScope):
 			if !hasScope(claims, "shrimp.write") {
 				h.insufficientScope(w, "shrimp.write")
 			} else {
 				h.problem(w, 403, "forbidden", "authorization")
 			}
 			return
-		case "execution_deadline_expired":
-			code = err.Error()
+		case errors.Is(err, ErrExecutionDeadlineExpired):
+			code = "execution_deadline_expired"
 			status = 409
 		}
 		h.problem(w, status, code, stage)
@@ -490,9 +509,10 @@ func (h *Handler) read(w http.ResponseWriter, r *http.Request) {
 	id := resource["id"].(string)
 	s, frontier, err := h.driver.Read(r.Context(), id, deps)
 	if err != nil {
+		err = legacyApplicationError(err)
 		status := 503
 		code := "storage_unavailable"
-		if err.Error() == "invalid_dependency" {
+		if errors.Is(err, ErrInvalidDependency) {
 			status = 409
 			code = "invalid_dependency"
 		}

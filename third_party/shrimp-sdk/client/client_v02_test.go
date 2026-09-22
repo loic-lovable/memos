@@ -50,7 +50,7 @@ func discoveryFixture02(t *testing.T) map[string]any {
 	}
 	catalog := []any{}
 	for _, file := range files {
-		if !strings.HasSuffix(file.Name(), "-v0.2.schema.json") && file.Name() != "human-attributes-v1.schema.json" {
+		if !strings.HasSuffix(file.Name(), "-v0.2.schema.json") && file.Name() != "human-attributes-v1.schema.json" && file.Name() != "enterprise-attributes-v1.schema.json" {
 			continue
 		}
 		raw, err := schemas.Files.ReadFile(file.Name())

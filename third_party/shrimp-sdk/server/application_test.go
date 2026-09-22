@@ -106,6 +106,126 @@ func TestApplicationOwnsAtomicMutationAndAuditPublication(t *testing.T) {
 	}
 }
 
+func TestApplicationFailureCategoriesPreserveWireAndAuditOutcomes(t *testing.T) {
+	for _, tc := range []struct {
+		name, scope, code, stage string
+		failure                  error
+		status                   int
+	}{
+		{"replay", "shrimp.read shrimp.write", "replay_conflict", "commit", ErrReplayConflict, 409},
+		{"lost result", "shrimp.read shrimp.write", "operation_result_unavailable", "recovery", ErrOperationResultUnavailable, 410},
+		{"profile", "shrimp.read shrimp.write", "unsupported_profile", "acceptance", ErrUnsupportedProfile, 400},
+		{"missing write scope", "shrimp.read", "insufficient_scope", "authorization", ErrInsufficientScope, 403},
+		{"application authorization", "shrimp.read shrimp.write", "forbidden", "authorization", ErrInsufficientScope, 403},
+		{"deadline", "shrimp.read shrimp.write", "execution_deadline_expired", "commit", ErrExecutionDeadlineExpired, 409},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, form := range []struct {
+				name string
+				err  error
+			}{
+				{"sentinel", tc.failure},
+				{"wrapped", fmt.Errorf("private context: %w", tc.failure)},
+				{"joined", errors.Join(errors.New("private storage detail"), tc.failure)},
+				{"legacy exact", errors.New(tc.failure.Error())},
+			} {
+				t.Run(form.name, func(t *testing.T) {
+					app := &contractApp{t: t, applyError: form.err}
+					h := &Handler{driver: app, path: "/shrimp", config: Config{Authority: "hr", AllowWrite: true}, resolved: map[string]*jsonschema.Resolved{"mutation": objectSchema(t)}}
+					r := httptest.NewRequest(http.MethodPost, "/shrimp/mutations", strings.NewReader(contractMutation))
+					r.Header.Set("SHRIMP-Version", "0.2")
+					claims := &accessClaims{Scope: tc.scope}
+					claims.Subject = "client"
+					w := httptest.NewRecorder()
+					h.auditedMutation(w, r, claims)
+					require.Equal(t, tc.status, w.Code)
+					var body map[string]any
+					require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+					require.Equal(t, tc.code, body["code"])
+					require.Equal(t, tc.stage, body["stage"])
+					require.Equal(t, "unknown", body["commit"], "a refused attempt cannot prove an earlier attempt never committed")
+					require.Equal(t, AuditOutcome{Code: tc.code, Stage: tc.stage, Commit: "not_committed"}, app.outcome)
+					require.Equal(t, []string{"begin", "identify", "apply", "finish"}, app.events)
+					require.NotContains(t, w.Body.String(), "private")
+					require.Equal(t, tc.scope == "shrimp.read", app.mutation.RecoverOnly)
+					if tc.code == "insufficient_scope" {
+						require.Contains(t, w.Header().Get("WWW-Authenticate"), `scope="shrimp.write"`)
+					} else {
+						require.Empty(t, w.Header().Get("WWW-Authenticate"))
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestUnclassifiedMutationErrorsRemainUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"storage", errors.New("private disk failure")},
+		{"wrapped legacy text", fmt.Errorf("private: %w", errors.New("replay_conflict"))},
+		{"embedded code", errors.New("private failure replay_conflict")},
+		{"read sentinel", fmt.Errorf("private: %w", ErrInvalidDependency)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := &contractApp{t: t, applyError: tc.err}
+			h := &Handler{driver: app, path: "/shrimp", config: Config{Authority: "hr", AllowWrite: true}, resolved: map[string]*jsonschema.Resolved{"mutation": objectSchema(t)}}
+			r := httptest.NewRequest(http.MethodPost, "/shrimp/mutations", strings.NewReader(contractMutation))
+			r.Header.Set("SHRIMP-Version", "0.2")
+			claims := &accessClaims{Scope: "shrimp.read shrimp.write"}
+			claims.Subject = "client"
+			w := httptest.NewRecorder()
+			h.auditedMutation(w, r, claims)
+			require.Equal(t, http.StatusServiceUnavailable, w.Code)
+			require.Equal(t, AuditOutcome{Stage: "commit", Code: "storage_unavailable"}, app.outcome)
+			require.Contains(t, w.Body.String(), `"commit":"unknown"`)
+			require.NotContains(t, w.Body.String(), "private")
+		})
+	}
+}
+
+type readErrorApp struct {
+	Application
+	failure error
+}
+
+func (a *readErrorApp) Read(context.Context, string, []string) (*Subject, string, error) {
+	return nil, "", a.failure
+}
+
+func TestReadFailureCategories(t *testing.T) {
+	const body = `{"target":{"resource":{"type":"subject","id":"subject"}},"wait_ms":0,"required_dependencies":["token"]}`
+	for _, tc := range []struct {
+		name, code string
+		failure    error
+		status     int
+	}{
+		{"dependency", "invalid_dependency", ErrInvalidDependency, 409},
+		{"wrapped dependency", "invalid_dependency", fmt.Errorf("private: %w", ErrInvalidDependency), 409},
+		{"legacy dependency", "invalid_dependency", errors.New("invalid_dependency"), 409},
+		{"wrapped legacy", "storage_unavailable", fmt.Errorf("private: %w", errors.New("invalid_dependency")), 503},
+		{"not found", "not_found", fmt.Errorf("private: %w", ErrNotFound), 404},
+		{"mutation sentinel", "storage_unavailable", fmt.Errorf("private: %w", ErrReplayConflict), 503},
+		{"storage", "storage_unavailable", errors.New("private disk failure"), 503},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := &Handler{driver: &readErrorApp{failure: tc.failure}, path: "/shrimp", resolved: map[string]*jsonschema.Resolved{"read": objectSchema(t)}}
+			r := httptest.NewRequest(http.MethodPost, "/shrimp/reads", strings.NewReader(body))
+			w := httptest.NewRecorder()
+			h.read(w, r)
+			require.Equal(t, tc.status, w.Code)
+			var problem map[string]any
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &problem))
+			require.Equal(t, tc.code, problem["code"])
+			require.Equal(t, "read", problem["stage"])
+			require.Equal(t, "unknown", problem["commit"])
+			require.NotContains(t, w.Body.String(), "private")
+		})
+	}
+}
+
 func TestApplicationNotFoundRemainsRecoveryFailureWithoutStorageDetails(t *testing.T) {
 	app := &lookupApp{failure: fmt.Errorf("private: %w", ErrNotFound)}
 	h := &Handler{driver: app, path: "/shrimp"}
@@ -146,12 +266,12 @@ func (a *profileCheckingApp) Apply(ctx context.Context, mutation Mutation) (*Res
 	}
 	if a.retained != nil {
 		if a.fingerprint != mutation.Fingerprint {
-			return nil, errors.New("replay_conflict")
+			return nil, fmt.Errorf("retained intent differs: %w", ErrReplayConflict)
 		}
 		return a.retained, nil
 	}
 	if mutation.UnsupportedProfiles {
-		return nil, errors.New("unsupported_profile")
+		return nil, fmt.Errorf("new profile is disabled: %w", ErrUnsupportedProfile)
 	}
 	a.fingerprint, a.retained = mutation.Fingerprint, result
 	a.commits++
@@ -203,4 +323,60 @@ func TestImpliedHumanAttributesPreserveApplicationRejectionAndRecovery(t *testin
 	require.Equal(t, accepted.Body.String(), recovered.Body.String())
 	require.True(t, app.mutation.RecoverOnly)
 	require.Equal(t, 1, app.commits)
+}
+
+func TestImpliedEnterpriseUsePreservesApplicationRejectionAndRecovery(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		command string
+	}{
+		{"select context", `{"command_id":"command","action":"set_enterprise_context","resource":{"type":"subject","id":"subject"},"expected_revision":"old","expected_context":null,"context":{"employer":"employer-1","issuer":"issuer-1"},"attributes":{},"authorization":"approval-1"}`},
+		{"update fields", `{"command_id":"command","action":"update_enterprise_attributes","resource":{"type":"subject","id":"subject"},"expected_revision":"old","expected_context":{"employer":"employer-1","issuer":"issuer-1","generation":"selection-1"},"set":{"title":"Engineer"},"clear":[]}`},
+		{"transfer field", `{"command_id":"command","action":"transfer_authority","resource":{"type":"subject","id":"subject"},"expected_revision":"old","expected_context":{"employer":"employer-1","issuer":"issuer-1","generation":"selection-1"},"field":"enterprise.title","new_authority":"hr-next","authorization":"approval-1"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var body, command map[string]any
+			require.NoError(t, json.Unmarshal([]byte(contractMutation), &body))
+			require.NoError(t, json.Unmarshal([]byte(tc.command), &command))
+			original := body["commands"]
+			app := &profileCheckingApp{contractApp: contractApp{t: t}}
+			h := &Handler{driver: app, path: "/shrimp", config: Config{Authority: "hr", AllowWrite: true}, resolved: map[string]*jsonschema.Resolved{"mutation": objectSchema(t), "receipt": objectSchema(t)}}
+			claims := &accessClaims{Scope: "shrimp.read shrimp.write"}
+			claims.Subject = "client"
+			submit := func() *httptest.ResponseRecorder {
+				t.Helper()
+				raw, err := json.Marshal(body)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "/shrimp/mutations", strings.NewReader(string(raw)))
+				request.Header.Set("SHRIMP-Version", "0.2")
+				response := httptest.NewRecorder()
+				h.auditedMutation(response, request, claims)
+				return response
+			}
+			body["commands"] = []any{command}
+			rejected := submit()
+			require.Equal(t, http.StatusBadRequest, rejected.Code)
+			require.Contains(t, rejected.Body.String(), `"code":"unsupported_profile"`)
+			require.True(t, app.mutation.UnsupportedProfiles)
+			require.Equal(t, "subject", app.mutation.SubjectID)
+			require.Zero(t, app.commits)
+
+			body["commands"] = original
+			accepted := submit()
+			require.Equal(t, http.StatusOK, accepted.Code)
+			require.Equal(t, 1, app.commits)
+			body["commands"] = []any{command}
+			conflict := submit()
+			require.Equal(t, http.StatusConflict, conflict.Code)
+			require.Contains(t, conflict.Body.String(), `"code":"replay_conflict"`)
+
+			body["commands"] = original
+			h.config.AllowWrite = false
+			recovered := submit()
+			require.Equal(t, http.StatusOK, recovered.Code)
+			require.Equal(t, accepted.Body.String(), recovered.Body.String())
+			require.True(t, app.mutation.RecoverOnly)
+			require.Equal(t, 1, app.commits)
+		})
+	}
 }

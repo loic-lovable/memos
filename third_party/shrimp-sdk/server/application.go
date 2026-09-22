@@ -18,11 +18,15 @@ type Application interface {
 	// A successful disable/retire must have blocked admission by Result.Time;
 	// that completion evidence must be retained unchanged with the result.
 	// Asynchronous admission blocking is unsupported by this bounded handler.
+	// Return the documented application sentinels for known failures, optionally
+	// wrapped with %w. Unknown errors must not imply a known rejection.
 	Apply(context.Context, Mutation) (*Result, error)
 	// Result returns immutable retained evidence, never reconstructed current state.
 	Result(context.Context, string, string, string) (*Result, error)
 	// Read resolves IDs across subject and source-reference namespaces. IDs must
 	// be unambiguous across those namespaces; the handler checks the requested kind.
+	// Return ErrNotFound for an absent record or ErrInvalidDependency for missing
+	// causal evidence. Either sentinel may be wrapped with private context.
 	Read(context.Context, string, []string) (*Subject, string, error)
 	// Enumerate uses one coherent observation for candidate prefixes passed to fits.
 	// It must retain continuation state through expiry and bind the entire selection.

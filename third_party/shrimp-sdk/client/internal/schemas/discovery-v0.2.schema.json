@@ -1796,10 +1796,11 @@
           "lifecycle-extensions",
           "mtls",
           "human-attributes-v1",
-          "email-verification-v1"
+          "email-verification-v1",
+          "enterprise-attributes-v1"
         ]
       },
-      "maxItems": 18,
+      "maxItems": 19,
       "uniqueItems": true,
       "allOf": [
         {
@@ -2111,6 +2112,27 @@
               {
                 "contains": {
                   "const": "human-attributes-v1"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "enterprise-attributes-v1"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              },
+              {
+                "contains": {
+                  "const": "human"
                 }
               }
             ]

@@ -48,6 +48,9 @@
             },
             "attribute_profile": {
               "const": "human-attributes-v1"
+            },
+            "enterprise": {
+              "$ref": "enterprise-attributes-v1.schema.json#/$defs/value"
             }
           },
           "required": [

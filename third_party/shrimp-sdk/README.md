@@ -38,11 +38,21 @@ application interface exposes protocol data and context only. An application mus
   their lease; a changed page replaces its previous successor branch. Every
   candidate passed to the size callback must be a prefix of one fixed observation.
 
-`Apply` retains the extracted application's public failure-code contract:
-`replay_conflict`, `operation_result_unavailable`, `unsupported_profile`,
-`insufficient_scope`, and `execution_deadline_expired` are exact error strings.
-Other errors become a bounded storage-unavailable response. Retained failed
-operation outcomes are carried in `Result.Error`; they are not transport errors.
+`Apply` returns stable sentinels for known failures: `ErrReplayConflict`,
+`ErrOperationResultUnavailable`, `ErrUnsupportedProfile`, `ErrInsufficientScope`
+and `ErrExecutionDeadlineExpired`. `Read` uses `ErrInvalidDependency` for missing
+causal evidence and `ErrNotFound` for an absent record. Wrap sentinels with `%w`
+to add internal context; the handler uses `errors.Is`. A missing operation result
+still has an unknown commit outcome. Return an unclassified error when storage
+cannot establish what happened; it becomes a bounded storage-unavailable response.
+Retained failed operation outcomes are carried in `Result.Error`; they are
+serialized protocol codes, not Go errors, and their stored representation is unchanged.
+
+The original exact string codes remain accepted by a deprecated compatibility
+fallback while existing adapters migrate. That fallback does not recognize
+substrings or wrapped legacy strings. New adapters must use the sentinels. For
+example, use `fmt.Errorf("read causal evidence: %w", server.ErrInvalidDependency)`
+rather than constructing an error whose text happens to be `invalid_dependency`.
 Enumeration uses `EnumerationError` for the documented public cursor and selection
 failures. Private error text is never returned to clients.
 
@@ -158,3 +168,18 @@ inside their own transaction, then commit its result with native changes and
 retained evidence. Resolve legacy ownership explicitly before calling it; the
 helper cannot infer an owner. It does not check the subject revision, authorize
 the caller, manage a replay window or commit anything.
+
+## Typed human attribute helpers
+
+[`profiles/humanattributes`](profiles/humanattributes/README.md) provides typed
+values, validation and proposed state transitions for structured names, email
+entries/generations and locale/timezone preferences. It checks field ownership,
+preserves exact facts, refuses retired entry keys and returns the email versions
+whose verification assertions the application must invalidate atomically.
+Callers supply trusted profile configuration and durable identifier history.
+Errors support `errors.Is` categories and `errors.As` field details.
+
+This package does not yet have transport dispatch, conditional migration or a
+Memos integration. Importing it does not activate `human-attributes-v1`; the
+handler still rejects that profile and advertises `profiles: []`. Its unit tests
+are helper evidence, separate from the real-application scalar pilot checks.
