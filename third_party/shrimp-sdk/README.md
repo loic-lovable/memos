@@ -4,6 +4,9 @@ Choose the [provisioning client](client/README.md) to send account changes from 
 provider or bridge. The server SDK below helps an application receive them.
 Both APIs remain experimental; neither includes a database or a provider bridge.
 
+The [profile boundary design](../../docs/design/sdk-profiles.md) describes the
+split between transport, reusable profile rules and application transactions.
+
 
 [Documentation](../../docs/README.md) · [Memos integration](#memos-integration) · [Database boundary](#database-boundary) · [Extraction evidence](#extraction-evidence)
 
@@ -147,3 +150,11 @@ its native nickname. Other application adapters retain the display-name-only def
 This extension does not select or advertise `human-attributes-v1`; richer selectors
 remain unsupported. The [Memos mapping](../../pilots/memos/human-attributes.md)
 records that profile's remaining implementation work.
+
+`profiles/scalar` supplies the shared compatibility types, decoding and pure
+owned-fact transition. `server.ScalarFact` and `client.ScalarChanges` remain
+compatible aliases. Applications can call `scalar.Apply` against current facts
+inside their own transaction, then commit its result with native changes and
+retained evidence. Resolve legacy ownership explicitly before calling it; the
+helper cannot infer an owner. It does not check the subject revision, authorize
+the caller, manage a replay window or commit anything.

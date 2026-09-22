@@ -128,3 +128,43 @@ func TestShrimpCreationAllowsAbsentFactsAndNativeWritesStayFenced(t *testing.T) 
 	_, err = s.UpdateUser(ctx, &store.UpdateUser{ID: made.Subject.UserID, Nickname: &name})
 	require.ErrorIs(t, err, store.ErrShrimpManagedWrite)
 }
+
+func TestShrimpLegacyOwnerResolutionPreservesFactsAndRetainedResult(t *testing.T) {
+	s, d := pilotStore(t)
+	ctx := t.Context()
+	create := pilotIntent(t, d, "create_subject", nil)
+	created, err := s.ApplyShrimp(ctx, create)
+	require.NoError(t, err)
+	name := created.Subject.Attributes["displayName"]
+	legacy := name
+	legacy.Authority = "" // The migration's fixed-enrollment sentinel.
+	raw, err := json.Marshal(map[string]store.ShrimpScalarFact{"displayName": legacy})
+	require.NoError(t, err)
+	_, err = d.db.ExecContext(ctx, "UPDATE shrimp_subject SET attributes=? WHERE id=?", string(raw), created.Subject.ID)
+	require.NoError(t, err)
+	update := pilotIntent(t, d, "update_subject", &created.Subject)
+	update.Set = map[string]string{"department": "Research"}
+	changed, err := s.ApplyShrimp(ctx, update)
+	require.NoError(t, err)
+	require.Empty(t, changed.Error)
+	got := changed.Subject.Attributes["displayName"]
+	require.Equal(t, name.Value, got.Value)
+	require.Equal(t, name.Revision, got.Revision)
+	require.Empty(t, got.Authority, "omitted legacy facts keep their stored representation")
+	native, err := s.GetUser(ctx, &store.FindUser{ID: &created.Subject.UserID})
+	require.NoError(t, err)
+	require.Equal(t, *name.Value, native.Nickname)
+	clear := pilotIntent(t, d, "update_subject", &changed.Subject)
+	clear.Set = map[string]string{}
+	clear.Clear = []string{"displayName"}
+	cleared, err := s.ApplyShrimp(ctx, clear)
+	require.NoError(t, err)
+	require.Empty(t, cleared.Error)
+	got = cleared.Subject.Attributes["displayName"]
+	require.Nil(t, got.Value)
+	require.Equal(t, name.Authority, got.Authority, "changed legacy owner resolves through the fixed enrollment")
+	require.Equal(t, cleared.Subject.Revision, got.Revision)
+	retained, err := s.ApplyShrimp(ctx, create)
+	require.NoError(t, err)
+	require.Equal(t, created, retained)
+}

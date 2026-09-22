@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"errors"
+
+	"github.com/lovablelabs/shrimp-protocol/sdk/go/profiles/scalar"
 )
 
 // Application supplies durable operations. Implementations own all storage,
@@ -53,11 +55,7 @@ var (
 
 // ScalarFact preserves an optional scalar with its own authority and revision.
 // A nil Value means explicitly cleared, not an absent field.
-type ScalarFact struct {
-	Value     *string `json:"value"`
-	Authority string  `json:"authority"`
-	Revision  string  `json:"revision"`
-}
+type ScalarFact = scalar.Fact
 
 // Subject is protocol identity without an application's native account identifier.
 type Subject struct {

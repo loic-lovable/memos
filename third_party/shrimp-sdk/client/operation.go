@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/lovablelabs/shrimp-protocol/sdk/go/profiles/scalar"
 )
 
 // Human identifies a new human in the caller's enrolled authority. SourceReference
@@ -338,28 +340,15 @@ func (c *Client) submissionReceipt(r response) error {
 
 // ScalarChanges updates the existing scalar representation, not human-attributes-v1.
 // Omitted fields remain unchanged; Clear writes an owned null fact.
-type ScalarChanges struct {
-	Set   map[string]string
-	Clear []string
-}
+type ScalarChanges = scalar.Changes
 
 // PrepareUpdate prepares an atomic scalar update under an observed subject revision.
 func (c *Client) PrepareUpdate(ctx context.Context, s SubjectVersion, changes ScalarChanges) (Intent, error) {
 	if s.ID == "" || s.Revision == "" || s.Authority == "" {
 		return Intent{}, errors.New("subject ID, revision and authority are required")
 	}
-	seen := map[string]bool{}
-	for name := range changes.Set {
-		if !scalarAttribute(name) {
-			return Intent{}, errors.New("unsupported scalar attribute")
-		}
-		seen[name] = true
-	}
-	for _, name := range changes.Clear {
-		if !scalarAttribute(name) || seen[name] {
-			return Intent{}, errors.New("invalid scalar clear")
-		}
-		seen[name] = true
+	if err := scalar.Validate(changes); err != nil {
+		return Intent{}, err
 	}
 	set := changes.Set
 	if set == nil {
@@ -370,7 +359,4 @@ func (c *Client) PrepareUpdate(ctx context.Context, s SubjectVersion, changes Sc
 		clear = []string{}
 	}
 	return c.prepare(ctx, s.Authority, map[string]any{"command_id": "c1", "action": "update_subject", "resource": map[string]any{"type": "subject", "id": s.ID}, "expected_revision": s.Revision, "set": set, "clear": clear})
-}
-func scalarAttribute(name string) bool {
-	return name == "displayName" || name == "department" || name == "email"
 }

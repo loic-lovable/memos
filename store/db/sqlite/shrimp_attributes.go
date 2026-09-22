@@ -1,7 +1,9 @@
 package sqlite
 
 import (
-	"unicode/utf8"
+	"slices"
+
+	"github.com/lovablelabs/shrimp-protocol/sdk/go/profiles/scalar"
 
 	"github.com/usememos/memos/store"
 )
@@ -23,31 +25,24 @@ func applyShrimpAttributes(s *store.ShrimpSubject, m store.ShrimpMutation, revis
 	if set == nil {
 		set = map[string]string{"displayName": m.DisplayName}
 	}
-	seen := map[string]bool{}
-	for name, value := range set {
-		if !validShrimpScalar(name) || !utf8.ValidString(value) || utf8.RuneCountInString(value) > 1024 {
-			return errShrimpConflict
+	current := make(map[string]scalar.Fact, len(s.Attributes))
+	for name, fact := range s.Attributes {
+		authority := fact.Authority
+		_, setting := set[name]
+		if authority == "" && (setting || slices.Contains(m.Clear, name)) {
+			// The legacy migration uses an empty owner for the fixed enrollment.
+			// Resolve it only for changed facts; preserve omitted facts exactly.
+			authority = m.Authority
 		}
-		if previous, ok := s.Attributes[name]; ok && previous.Authority != "" && previous.Authority != m.Authority {
-			return errShrimpConflict
-		}
-		seen[name] = true
+		current[name] = scalar.Fact{Value: fact.Value, Authority: authority, Revision: fact.Revision}
 	}
-	for _, name := range m.Clear {
-		if !validShrimpScalar(name) || seen[name] {
-			return errShrimpConflict
-		}
-		if previous, ok := s.Attributes[name]; ok && previous.Authority != "" && previous.Authority != m.Authority {
-			return errShrimpConflict
-		}
-		seen[name] = true
+	next, err := scalar.Apply(current, scalar.Changes{Set: set, Clear: m.Clear}, m.Authority, revision)
+	if err != nil {
+		return errShrimpConflict
 	}
-	for name, value := range set {
-		v := value
-		s.Attributes[name] = store.ShrimpScalarFact{Value: &v, Authority: m.Authority, Revision: revision}
-	}
-	for _, name := range m.Clear {
-		s.Attributes[name] = store.ShrimpScalarFact{Authority: m.Authority, Revision: revision}
+	s.Attributes = make(map[string]store.ShrimpScalarFact, len(next))
+	for name, fact := range next {
+		s.Attributes[name] = store.ShrimpScalarFact{Value: fact.Value, Authority: fact.Authority, Revision: fact.Revision}
 	}
 	if fact, ok := s.Attributes["displayName"]; ok {
 		s.DisplayName = ""
@@ -56,7 +51,4 @@ func applyShrimpAttributes(s *store.ShrimpSubject, m store.ShrimpMutation, revis
 		}
 	}
 	return nil
-}
-func validShrimpScalar(name string) bool {
-	return name == "displayName" || name == "department" || name == "email"
 }
