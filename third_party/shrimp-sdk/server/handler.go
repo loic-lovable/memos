@@ -36,6 +36,9 @@ type Config struct {
 	SchemaDirectory string `json:"schema_directory"`
 	// ScalarAttributes requires Apply to enforce and persist Set/Clear and owned facts.
 	ScalarAttributes bool `json:"scalar_attributes"`
+	// AtomicSubjectUpdates requires one transaction for attributes, lifecycle,
+	// native admission fences and the retained result, with both authorizations.
+	AtomicSubjectUpdates bool `json:"atomic_subject_updates"`
 	// ExperimentalHumanAttributes dispatches typed commands for application
 	// integration tests. It does not advertise profile support or completeness.
 	ExperimentalHumanAttributes                     bool `json:"experimental_human_attributes"`
@@ -411,6 +414,10 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		m.SubjectID = resource["id"].(string)
 		m.ExpectedRevision = command["expected_revision"].(string)
 		if m.Action == "update_subject" {
+			m.Lifecycle, _ = command["lifecycle"].(string)
+			if m.Lifecycle != "" && !h.config.AtomicSubjectUpdates {
+				m.UnsupportedProfiles = true
+			}
 			set := command["set"].(map[string]any)
 			if m.AttributeProfile != "" {
 				m.HumanAttributes, _ = json.Marshal(map[string]any{"set": set, "clear": command["clear"]})
@@ -493,7 +500,7 @@ func (h *Handler) writeReceipt(w http.ResponseWriter, window, id string, result 
 		if result.Action == "create_subject" {
 			resources = append(resources, map[string]any{"command_id": result.CommandID, "resource": ref("source_reference", s.SourceID), "revision": s.SourceRevision})
 		}
-		if result.Action == "disable" || result.Action == "retire" {
+		if result.Action == "disable" || result.Action == "retire" || result.Lifecycle == "disabled" || result.Lifecycle == "retired" {
 			effects = append(effects, map[string]any{"id": "admission", "kind": "admission_block", "resource": ref("subject", s.ID), "consumer": h.config.AdmissionConsumer, "state": "complete", "deadline": stamp(result.Time), "observed_frontier": result.Token, "error": nil})
 		}
 	}

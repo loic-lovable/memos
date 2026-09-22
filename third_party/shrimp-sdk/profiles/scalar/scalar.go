@@ -8,6 +8,13 @@ import (
 	"unicode/utf8"
 )
 
+var (
+	// ErrInvalid marks invalid scalar input or missing application context.
+	ErrInvalid = errors.New("invalid scalar input")
+	// ErrAuthority marks an attempt to change another authority's fact.
+	ErrAuthority = errors.New("scalar authority conflict")
+)
+
 // Fact records an owned value and its revision. A nil Value is an explicit clear;
 // an absent map entry means that no fact exists.
 type Fact struct {
@@ -22,19 +29,19 @@ type Changes struct {
 	Clear []string
 }
 
-// Validate checks supported names and rejects overlapping or duplicate changes.
-// It permits empty changes and does not validate values or ownership.
+// Validate checks names, exact UTF-8 values and overlapping or duplicate changes.
+// It permits empty changes and does not validate ownership.
 func Validate(change Changes) error {
 	seen := make(map[string]bool, len(change.Set)+len(change.Clear))
-	for name := range change.Set {
-		if !supported(name) {
-			return errors.New("unsupported scalar attribute")
+	for name, value := range change.Set {
+		if !supported(name) || !utf8.ValidString(value) || utf8.RuneCountInString(value) > 1024 {
+			return ErrInvalid
 		}
 		seen[name] = true
 	}
 	for _, name := range change.Clear {
 		if !supported(name) || seen[name] {
-			return errors.New("invalid scalar clear")
+			return ErrInvalid
 		}
 		seen[name] = true
 	}
@@ -48,14 +55,14 @@ func Decode(set map[string]any, clear []any) (Changes, error) {
 	for name, input := range set {
 		value, ok := input.(string)
 		if !ok {
-			return Changes{}, errors.New("scalar: value must be a string")
+			return Changes{}, ErrInvalid
 		}
 		change.Set[name] = value
 	}
 	for _, input := range clear {
 		name, ok := input.(string)
 		if !ok {
-			return Changes{}, errors.New("scalar: attribute name must be a string")
+			return Changes{}, ErrInvalid
 		}
 		change.Clear = append(change.Clear, name)
 	}
@@ -72,22 +79,19 @@ func Decode(set map[string]any, clear []any) (Changes, error) {
 // and must commit the result with their native changes and operation receipt.
 func Apply(current map[string]Fact, change Changes, authority, revision string) (map[string]Fact, error) {
 	if authority == "" || revision == "" {
-		return nil, errors.New("scalar: authority and revision are required")
+		return nil, ErrInvalid
 	}
 	if err := Validate(change); err != nil {
 		return nil, err
 	}
-	for name, value := range change.Set {
-		if !utf8.ValidString(value) || utf8.RuneCountInString(value) > 1024 {
-			return nil, errors.New("scalar: invalid value")
-		}
+	for name := range change.Set {
 		if previous, ok := current[name]; ok && previous.Authority != authority {
-			return nil, errors.New("scalar: attribute authority conflict")
+			return nil, ErrAuthority
 		}
 	}
 	for _, name := range change.Clear {
 		if previous, ok := current[name]; ok && previous.Authority != authority {
-			return nil, errors.New("scalar: attribute authority conflict")
+			return nil, ErrAuthority
 		}
 	}
 	result := make(map[string]Fact, len(current)+len(change.Set)+len(change.Clear))

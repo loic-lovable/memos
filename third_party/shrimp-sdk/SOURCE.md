@@ -1,7 +1,7 @@
 # SHRIMP SDK source snapshot
 
 Copied from `sdk/go` in `github.com/lovablelabs/shrimp-protocol` at
-`eb462b4eac1ad91e4106cd23b83f0ed5796029a8`. The upstream repository is internal; this checked-in copy lets
+`0bb4b2fb7bdad6fc39d743d91ea7a2c54201a4ca`. The upstream repository is internal; this checked-in copy lets
 public Memos builds use the experimental SDK without private repository access.
 
 All other files in this directory are unchanged from that revision, including

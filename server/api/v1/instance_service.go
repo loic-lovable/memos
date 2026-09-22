@@ -207,6 +207,9 @@ func (s *APIV1Service) UpdateInstanceSetting(ctx context.Context, request *v1pb.
 		return nil, status.Errorf(codes.InvalidArgument, "invalid instance setting name: %v", err)
 	}
 	settingKey := storepb.InstanceSettingKey(storepb.InstanceSettingKey_value[settingKeyString])
+	if s.Store.ShrimpPilotEnabled() && settingKey == storepb.InstanceSettingKey_GENERAL {
+		return nil, s.refuseNativeAdministration(ctx, "update_authentication_settings")
+	}
 	if s.Store.IsInstanceSettingDeploymentConfigured(settingKey) {
 		return nil, status.Errorf(codes.FailedPrecondition, "instance setting %q is configured by the deployment", settingKeyString)
 	}

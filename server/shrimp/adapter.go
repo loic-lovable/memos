@@ -69,7 +69,7 @@ func result(r *store.ShrimpResult) *sdk.Result {
 		return nil
 	}
 	return &sdk.Result{AuditAttempt: r.AuditAttempt, Subject: subject(r.Subject), Token: r.Token, Time: r.Time,
-		RetainedUntil: r.RetainedUntil, Action: r.Action, Error: r.Error, CommandID: r.CommandID}
+		RetainedUntil: r.RetainedUntil, Action: r.Action, Lifecycle: r.Lifecycle, Error: r.Error, CommandID: r.CommandID}
 }
 
 func (a *application) Window(ctx context.Context, principal string) (string, int64, error) {
@@ -88,7 +88,7 @@ func (a *application) Apply(ctx context.Context, m sdk.Mutation) (*sdk.Result, e
 	}
 	r, err := h.store.ApplyShrimp(ctx, store.ShrimpMutation{
 		Principal: m.Principal, Window: m.Window, ID: m.ID, Fingerprint: m.Fingerprint,
-		Action: m.Action, SubjectID: m.SubjectID, ExpectedRevision: m.ExpectedRevision,
+		Action: m.Action, Lifecycle: m.Lifecycle, SubjectID: m.SubjectID, ExpectedRevision: m.ExpectedRevision,
 		SourceReference: m.SourceReference, DisplayName: m.DisplayName, Authority: m.Authority, Set: m.Set, Clear: m.Clear, SSOProvider: h.config.SSOProvider,
 		Deadline: m.Deadline, Dependencies: m.Dependencies, CommandID: m.CommandID,
 		RecoverOnly: m.RecoverOnly, UnsupportedProfiles: m.UnsupportedProfiles,

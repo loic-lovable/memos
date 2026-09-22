@@ -63,15 +63,18 @@ func (c *Client) ReadSubject(ctx context.Context, id string) (map[string]any, er
 
 // PrepareCreate prepares one disabled human creation without submitting it.
 func (c *Client) PrepareCreate(ctx context.Context, h Human) (Intent, error) {
-	if h.Authority == "" || h.SourceReference == "" {
+	if !humanToken(h.Authority) || !humanToken(h.SourceReference) {
 		return Intent{}, errors.New("authority and stable source reference are required")
 	}
-	attributes := map[string]any{"displayName": h.DisplayName}
+	attributes := map[string]string{"displayName": h.DisplayName}
 	if h.Department != nil {
 		attributes["department"] = *h.Department
 	}
 	if h.Email != nil {
 		attributes["email"] = *h.Email
+	}
+	if err := scalar.Validate(scalar.Changes{Set: attributes}); err != nil {
+		return Intent{}, err
 	}
 	return c.prepare(ctx, h.Authority, map[string]any{"command_id": "c1", "action": "create_subject", "if_absent": true, "profile": "human", "attributes": attributes, "expires_at": nil, "source_reference": h.SourceReference})
 }
@@ -86,7 +89,7 @@ func (c *Client) PrepareDisable(ctx context.Context, s SubjectVersion) (Intent, 
 	return c.prepareTransition(ctx, s, "disable")
 }
 func (c *Client) prepareTransition(ctx context.Context, s SubjectVersion, action string) (Intent, error) {
-	if s.ID == "" || s.Revision == "" || s.Authority == "" {
+	if !humanVersion(s) {
 		return Intent{}, errors.New("subject ID, revision and authority are required")
 	}
 	return c.prepare(ctx, s.Authority, map[string]any{"command_id": "c1", "action": action, "resource": map[string]any{"type": "subject", "id": s.ID}, "expected_revision": s.Revision})
@@ -291,12 +294,13 @@ func (c *Client) originalRetention(intent Intent, receipt map[string]any) error 
 	return nil
 }
 
-// A successful receipt must describe the command we actually submitted.
+// Every committed receipt must describe the command we actually submitted,
+// including a pending or failed operation with unfinished downstream effects.
 func (c *Client) operationReceipt(intent Intent, receipt map[string]any) error {
 	if err := c.originalRetention(intent, receipt); err != nil {
 		return err
 	}
-	if receipt["state"] != "succeeded" {
+	if receipt["commit"].(map[string]any)["state"] != "committed" {
 		return nil
 	}
 	value, err := decodeJSON([]byte(intent.body))
@@ -307,6 +311,7 @@ func (c *Client) operationReceipt(intent Intent, receipt map[string]any) error {
 	action := command["action"].(string)
 	subject, previous := "", ""
 	if action == "create_subject" {
+		sources := 0
 		for _, item := range receipt["commit"].(map[string]any)["resources"].([]any) {
 			resource := item.(map[string]any)
 			ref := resource["resource"].(map[string]any)
@@ -315,17 +320,37 @@ func (c *Client) operationReceipt(intent Intent, receipt map[string]any) error {
 			}
 			if ref["type"] == "subject" {
 				subject = ref["id"].(string)
+			} else if ref["type"] == "source_reference" {
+				sources++
 			}
+		}
+		wantSources := 0
+		if command["source_reference"] != nil {
+			wantSources = 1
+		}
+		if sources != wantSources {
+			return errors.New("receipt source association does not match the creation request")
 		}
 	} else {
 		subject = command["resource"].(map[string]any)["id"].(string)
 		previous = command["expected_revision"].(string)
 	}
+	if action == "update_subject" {
+		// The wire action remains update_subject; validate the requested lifecycle
+		// effect as part of this same outcome, including historical retries.
+		switch command["lifecycle"] {
+		case "active":
+			action = "activate"
+		case "disabled":
+			action = "disable"
+		case "retired":
+			action = "retire"
+		}
+	}
 	if subject == "" {
 		return errors.New("receipt omitted created subject")
 	}
-	_, err = c.lifecycleReceipt02(receipt, subject, action, previous)
-	return err
+	return committedHumanReceipt02(receipt, subject, action, previous, command["command_id"].(string))
 }
 
 func (c *Client) submissionReceipt(r response) error {
@@ -356,8 +381,35 @@ type ScalarChanges = scalar.Changes
 
 // PrepareUpdate prepares an atomic scalar update under an observed subject revision.
 func (c *Client) PrepareUpdate(ctx context.Context, s SubjectVersion, changes ScalarChanges) (Intent, error) {
-	if s.ID == "" || s.Revision == "" || s.Authority == "" {
+	return c.prepareScalarUpdate(ctx, s, changes, "")
+}
+
+// PrepareUpdateLifecycle prepares a nonempty scalar update and an explicit
+// active, disabled or retired lifecycle under one observed revision. Both parts
+// must commit together; an invalid attribute also prevents the lifecycle change.
+// This never falls back to separate operations.
+func (c *Client) PrepareUpdateLifecycle(ctx context.Context, s SubjectVersion, changes ScalarChanges, lifecycle string) (Intent, error) {
+	if err := validateLifecycle(lifecycle); err != nil {
+		return Intent{}, err
+	}
+	return c.prepareScalarUpdate(ctx, s, changes, lifecycle)
+}
+
+func validateLifecycle(lifecycle string) error {
+	switch lifecycle {
+	case "active", "disabled", "retired":
+		return nil
+	default:
+		return errors.New("lifecycle must be active, disabled or retired")
+	}
+}
+
+func (c *Client) prepareScalarUpdate(ctx context.Context, s SubjectVersion, changes ScalarChanges, lifecycle string) (Intent, error) {
+	if !humanVersion(s) {
 		return Intent{}, errors.New("subject ID, revision and authority are required")
+	}
+	if len(changes.Set) == 0 && len(changes.Clear) == 0 {
+		return Intent{}, errors.New("an attribute update must change at least one field")
 	}
 	if err := scalar.Validate(changes); err != nil {
 		return Intent{}, err
@@ -370,5 +422,9 @@ func (c *Client) PrepareUpdate(ctx context.Context, s SubjectVersion, changes Sc
 	if clear == nil {
 		clear = []string{}
 	}
-	return c.prepare(ctx, s.Authority, map[string]any{"command_id": "c1", "action": "update_subject", "resource": map[string]any{"type": "subject", "id": s.ID}, "expected_revision": s.Revision, "set": set, "clear": clear})
+	command := map[string]any{"command_id": "c1", "action": "update_subject", "resource": map[string]any{"type": "subject", "id": s.ID}, "expected_revision": s.Revision, "set": set, "clear": clear}
+	if lifecycle != "" {
+		command["lifecycle"] = lifecycle
+	}
+	return c.prepare(ctx, s.Authority, command)
 }

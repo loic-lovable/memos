@@ -68,6 +68,7 @@ type ShrimpMutation struct {
 	HumanAttributes                                                         json.RawMessage
 	HumanProfile                                                            *humanattributes.Profile
 	Migration                                                               *ShrimpHumanMigration
+	Lifecycle                                                               string
 }
 
 // ShrimpResult is immutable commit evidence retained with the account write.
@@ -77,6 +78,7 @@ type ShrimpResult struct {
 	Token               string
 	Time, RetainedUntil int64
 	Action              string
+	Lifecycle           string `json:",omitempty"`
 	Error               string
 	CommandID           string
 }

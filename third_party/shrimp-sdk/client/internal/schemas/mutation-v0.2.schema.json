@@ -180,6 +180,14 @@
         "clear": {},
         "attribute_profile": {
           "const": "human-attributes-v1"
+        },
+        "lifecycle": {
+          "type": "string",
+          "enum": [
+            "active",
+            "disabled",
+            "retired"
+          ]
         }
       },
       "required": [

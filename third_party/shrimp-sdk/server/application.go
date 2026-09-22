@@ -93,6 +93,9 @@ type Mutation struct {
 	AttributeProfile string
 	HumanAttributes  json.RawMessage
 	Migration        *HumanAttributeMigration
+	// Lifecycle optionally combines an attribute update with a lifecycle target.
+	// Apply must check both permissions and commit both changes atomically.
+	Lifecycle string
 }
 
 // HumanAttributeMigration carries an opaque administrative approval handle.
@@ -108,6 +111,9 @@ type HumanAttributeMigration struct {
 
 // Result is immutable commit evidence retained atomically with the account change.
 type Result struct {
+	// Lifecycle retains the requested transition on a compound update. Omitted
+	// historical values preserve the original single-action receipt contract.
+	Lifecycle                string `json:",omitempty"`
 	AuditAttempt             string
 	Subject                  Subject
 	Token                    string

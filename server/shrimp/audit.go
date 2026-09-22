@@ -58,8 +58,8 @@ func (h *Handler) OperationalAuditHandler(secret string) http.Handler {
 			"scope": h.scope(), "journal": page,
 			"coverage": map[string]any{
 				"complete":              false,
-				"surface":               "authenticated SHRIMP mutation submissions and native UpdateUser/DeleteUser calls in this pilot",
-				"restrictions":          []string{"no unauthenticated traffic or ordinary reads", "no native signup, settings, binding or trust administration", "no backup restoration continuity", "no raw values, credentials, request bodies or receipts"},
+				"surface":               "authenticated SHRIMP mutations, native UpdateUser/DeleteUser, refused authenticated signup/provider/link/authentication-setting changes, and local provisioning-policy changes",
+				"restrictions":          []string{"no unauthenticated traffic or ordinary reads", "no successful native signup or provider/link/authentication-setting changes after enrollment; other settings are outside this surface", "no backup restoration continuity", "no raw values, credentials, request bodies or receipts"},
 				"min_retention_seconds": 604800, "collection": "settled attempts older than seven days may be collected at capacity; unresolved and retained-result references are preserved",
 				"max_attempts": 100000, "max_operation_results": 10000, "publication": "synchronous local SQLite journal; unresolved attempts remain visible",
 			},

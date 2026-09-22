@@ -48,7 +48,7 @@ func TestAuthenticationBindsIssuerAudienceMethodURLTokenAndKey(t *testing.T) {
 	require.NoError(t, err)
 	thumb := sha256.Sum256(canonical)
 	resource := "https://pilot.example/shrimp/v1/tenants/acme/domains/A"
-	cases := []string{"valid", "issuer", "audience", "method", "url", "access_hash", "proof_key", "expired", "private_jwk", "replay"}
+	cases := []string{"valid", "singleton_audience", "issuer", "audience", "multiple_audiences", "duplicate_audience", "method", "url", "access_hash", "proof_key", "expired", "private_jwk", "replay"}
 	for _, name := range cases {
 		t.Run(name, func(t *testing.T) {
 			h := &Handler{config: Config{Issuer: "https://issuer.example", IssuerKeyID: "issuer-1", Resource: resource, ClientID: "hr"}, origin: "https://pilot.example", key: &issuer.PublicKey, driver: &proofStore{used: map[string]bool{}}}
@@ -59,6 +59,12 @@ func TestAuthenticationBindsIssuerAudienceMethodURLTokenAndKey(t *testing.T) {
 				claims["iss"] = "https://attacker.example"
 			case "audience":
 				claims["aud"] = resource + "other"
+			case "singleton_audience":
+				claims["aud"] = []string{resource}
+			case "multiple_audiences":
+				claims["aud"] = []string{resource, resource + "other"}
+			case "duplicate_audience":
+				claims["aud"] = []string{resource, resource}
 			case "expired":
 				claims["exp"] = now - 1
 			case "proof_key":
@@ -95,7 +101,7 @@ func TestAuthenticationBindsIssuerAudienceMethodURLTokenAndKey(t *testing.T) {
 			r.Header.Set("Authorization", "DPoP "+access)
 			r.Header.Set("DPoP", signed)
 			_, err = h.authenticate(r)
-			if name == "valid" || name == "replay" {
+			if name == "valid" || name == "singleton_audience" || name == "replay" {
 				require.NoError(t, err)
 			} else {
 				require.Error(t, err)

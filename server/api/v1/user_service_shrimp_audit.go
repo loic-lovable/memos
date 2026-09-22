@@ -10,7 +10,18 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	v1pb "github.com/usememos/memos/proto/gen/api/v1"
+	"github.com/usememos/memos/store"
 )
+
+// refuseNativeAdministration journals authenticated changes excluded by the
+// pilot's fixed enrollment. No submitted values or credential bodies are stored.
+func (s *APIV1Service) refuseNativeAdministration(ctx context.Context, action string) error {
+	ctx, err := s.beginNativeAudit(ctx, action)
+	if err != nil {
+		return err
+	}
+	return s.finishNativeAudit(ctx, status.Error(codes.PermissionDenied, store.ErrShrimpNativeAdministration.Error()))
+}
 
 func (s *APIV1Service) beginNativeAudit(ctx context.Context, action string) (context.Context, error) {
 	if !s.Store.ShrimpPilotEnabled() {

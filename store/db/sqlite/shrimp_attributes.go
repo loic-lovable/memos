@@ -38,7 +38,7 @@ func applyShrimpAttributes(s *store.ShrimpSubject, m store.ShrimpMutation, revis
 	}
 	next, err := scalar.Apply(current, scalar.Changes{Set: set, Clear: m.Clear}, m.Authority, revision)
 	if err != nil {
-		return errShrimpConflict
+		return err
 	}
 	s.Attributes = make(map[string]store.ShrimpScalarFact, len(next))
 	for name, fact := range next {

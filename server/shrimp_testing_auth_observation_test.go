@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"net/http"
@@ -36,6 +37,9 @@ func TestPrivateAuthenticationObservation(t *testing.T) {
 	other, err := s.CreateUser(ctx, &store.User{Username: "other", Role: store.RoleUser, RowStatus: store.Archived})
 	require.NoError(t, err)
 	require.NoError(t, s.EnableShrimpPilot(ctx, "https://pilot.example/shrimp/v1/tenants/acme/domains/A"))
+	require.NoError(t, s.GetDriver().(interface {
+		ConfigureShrimpPolicy(context.Context, string, bool) error
+	}).ConfigureShrimpPolicy(ctx, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", true))
 	window, deadline, err := d.(store.ShrimpDriver).ShrimpWindow(ctx, "hr")
 	require.NoError(t, err)
 	created, err := s.ApplyShrimp(ctx, store.ShrimpMutation{Authority: "hr-authority", Principal: "hr", Window: window, ID: "create", Fingerprint: "create", Action: "create_subject", SourceReference: "auth-fixture", DisplayName: "Pilot", Deadline: deadline - 1, CommandID: "c1"})

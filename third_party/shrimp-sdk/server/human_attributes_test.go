@@ -77,3 +77,38 @@ func TestHumanDirectRecordUsesJSONFactsWithoutPrivateHistory(t *testing.T) {
 	require.NotContains(t, attrs, "entry_ids")
 	require.NotContains(t, attrs, "displayName")
 }
+
+func TestCompoundUpdateDispatchRequiresApplicationOptIn(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		app := &contractApp{t: t}
+		h := &Handler{driver: app, path: "/shrimp", config: Config{Authority: "hr", AllowWrite: true, ScalarAttributes: true, AtomicSubjectUpdates: enabled}, resolved: map[string]*jsonschema.Resolved{"mutation": objectSchema(t), "receipt": objectSchema(t)}}
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(contractMutation), &body))
+		body["commands"] = []any{map[string]any{"command_id": "command", "action": "update_subject", "resource": map[string]any{"id": "subject"}, "expected_revision": "old", "set": map[string]any{"displayName": "Departed"}, "clear": []any{}, "lifecycle": "disabled"}}
+		raw, err := json.Marshal(body)
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "/shrimp/mutations", strings.NewReader(string(raw)))
+		request.Header.Set("SHRIMP-Version", "0.2")
+		claims := &accessClaims{Scope: "shrimp.read shrimp.write"}
+		claims.Subject = "client"
+		response := httptest.NewRecorder()
+		h.auditedMutation(response, request, claims)
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Equal(t, "disabled", app.mutation.Lifecycle)
+		require.Equal(t, "Departed", app.mutation.Set["displayName"])
+		require.Equal(t, !enabled, app.mutation.UnsupportedProfiles, "old adapters must not silently drop the transition")
+	}
+}
+
+func TestCompoundReceiptRetainsAdmissionEffectAfterLaterActivation(t *testing.T) {
+	h := &Handler{config: Config{AdmissionConsumer: "native-login"}, resolved: map[string]*jsonschema.Resolved{"receipt": objectSchema(t)}}
+	result := &Result{Action: "update_subject", Lifecycle: "disabled", Subject: Subject{ID: "s1", Revision: "r1", Lifecycle: "disabled"}, Token: "token", CommandID: "c1", Time: 1, RetainedUntil: 86401}
+	response := httptest.NewRecorder()
+	h.writeReceipt(response, "window", "operation", result)
+	require.Contains(t, response.Body.String(), `"kind":"admission_block"`)
+	// Current configuration/support is irrelevant to the retained result.
+	h.config.AtomicSubjectUpdates = false
+	again := httptest.NewRecorder()
+	h.writeReceipt(again, "window", "operation", result)
+	require.Equal(t, response.Body.String(), again.Body.String())
+}

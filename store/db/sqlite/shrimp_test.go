@@ -24,6 +24,9 @@ func pilotStore(t *testing.T) (*store.Store, *DB) {
 	t.Cleanup(func() { require.NoError(t, s.Close()) })
 	require.NoError(t, s.Migrate(t.Context()))
 	require.NoError(t, s.EnableShrimpPilot(t.Context(), "https://pilot.example/shrimp/v1/tenants/acme/domains/A"))
+	// Fixture starts with an enrolled policy; policy startup journaling has its own tests.
+	_, err = driver.GetDB().ExecContext(t.Context(), "INSERT INTO shrimp_policy(id,issuer_key,write_withdrawn) VALUES(1,?,0)", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	require.NoError(t, err)
 	return s, driver.(*DB)
 }
 
@@ -234,7 +237,7 @@ func TestShrimpDisableAlreadyDisabledAndReplayAfterRestore(t *testing.T) {
 
 	stale, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "activate", &created.Subject))
 	require.NoError(t, err)
-	require.Equal(t, "mutation_rejected", stale.Error)
+	require.Equal(t, "revision_conflict", stale.Error)
 	active, err := s.ApplyShrimp(ctx, pilotIntent(t, d, "activate", &disabled.Subject))
 	require.NoError(t, err)
 	require.Empty(t, active.Error)
@@ -272,7 +275,7 @@ func TestShrimpRetirementFencesAdmissionAndIsTerminal(t *testing.T) {
 			stale.ID, stale.Fingerprint, stale.ExpectedRevision = random.UUID(), random.UUID(), created.Subject.Revision
 			refused, err := s.ApplyShrimp(ctx, stale)
 			require.NoError(t, err)
-			require.Equal(t, "mutation_rejected", refused.Error)
+			require.Equal(t, "revision_conflict", refused.Error)
 			retired, err := s.ApplyShrimp(ctx, intent)
 			require.NoError(t, err)
 			require.Empty(t, retired.Error)
@@ -295,7 +298,7 @@ func TestShrimpRetirementFencesAdmissionAndIsTerminal(t *testing.T) {
 			for _, action := range []string{"activate", "disable", "retire", "update_subject"} {
 				result, err := s.ApplyShrimp(ctx, pilotIntent(t, d, action, &retired.Subject))
 				require.NoError(t, err)
-				require.Equal(t, "mutation_rejected", result.Error, action)
+				require.Equal(t, "invalid_lifecycle_transition", result.Error, action)
 			}
 			again, err := s.ApplyShrimp(ctx, intent)
 			require.NoError(t, err)
@@ -321,7 +324,7 @@ func TestShrimpActiveRetirementPreservesLastSpaceAdmin(t *testing.T) {
 	intent := pilotIntent(t, d, "retire", &active.Subject)
 	refused, err := s.ApplyShrimp(ctx, intent)
 	require.NoError(t, err)
-	require.Equal(t, "mutation_rejected", refused.Error)
+	require.Equal(t, "authority_conflict", refused.Error)
 	current, frontier, err := d.ReadShrimp(ctx, active.Subject.ID, nil)
 	require.NoError(t, err)
 	require.Equal(t, active.Subject, *current, "native guard must roll back retirement and revision")

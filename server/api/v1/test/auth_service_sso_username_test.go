@@ -27,6 +27,9 @@ func TestProvisionedSSOAttemptStaysFencedAfterDisableAndRestore(t *testing.T) {
 	defer provider.Close()
 	idpName := createTestingOAuthIdentityProvider(ctx, t, ts, provider.URL, "pilot-sso")
 	require.NoError(t, ts.Store.EnableShrimpPilot(ctx, "test-enrollment"))
+	require.NoError(t, ts.Store.GetDriver().(interface {
+		ConfigureShrimpPolicy(context.Context, string, bool) error
+	}).ConfigureShrimpPolicy(ctx, strings.Repeat("a", 64), true))
 	driver := ts.Store.GetDriver().(store.ShrimpDriver)
 	mutate := func(action string, subject *store.ShrimpSubject) *store.ShrimpSubject {
 		window, closes, err := driver.ShrimpWindow(ctx, "hr")

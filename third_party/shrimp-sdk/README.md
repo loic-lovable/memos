@@ -12,7 +12,7 @@ split between transport, reusable profile rules and application transactions.
 
 This module handles a bounded SHRIMP 0.2 HTTP surface extracted from the Memos
 pilot. Its API is experimental. It advertises `profiles: []` and does not implement
-a complete conformance profile. A second application has not validated the API.
+a complete conformance profile. A [bounded PocketBase adoption check](../../pilots/pocketbase/README.md) now exercises the same application interface and native login boundary in a second Go application.
 
 Import `github.com/lovablelabs/shrimp-protocol/sdk/go/server`. Implement
 `server.Application`, provide trusted `server.Config`, then mount the handler
@@ -115,6 +115,12 @@ includes no bundled persistence implementation.
 
 ## Verification and next adoption step
 
+Start with the [runnable client workflow](examples/provision/README.md),
+[application transaction guide](server/README.md), and
+[reusable adapter tests](server/servertest/servertest.go). Client typed reads and
+outcomes preserve the raw APIs; they distinguish an unknown outcome from a known
+failure and keep commit evidence separate from effect completion.
+
 1. Keep storage and admission checks in the application. Verify that the core SDK
    interface exposes no database handles or transaction types and that its package
    contains no database setup or migrations.
@@ -123,9 +129,17 @@ includes no bundled persistence implementation.
 3. Run the same dedicated, shared read/lifecycle/enumeration and SSO checks.
    Preserve account identity, exact retry recovery, old-login refusal after
    disable/restore, note preservation, and all negative/inconclusive controls.
-4. Use a second Go application to find assumptions specific to Memos before
-   stabilizing the API. Do not equate two apps using one SDK with independent
-   protocol implementations.
+4. Run the [PocketBase adoption check](../../pilots/pocketbase/README.md). It uses
+   native account transactions and password/refresh routes, alongside the same
+   contract kit as Memos. It is a bounded second-application experiment, not a
+   second independent protocol implementation or a stable API release.
+
+`Config.AtomicSubjectUpdates` opts into `update_subject` with an optional
+`lifecycle` target. Enable it only when the application checks and commits both
+changes together. Retain `Result.Lifecycle` with the result so recovery preserves
+the original admission effect after later activation. Legacy update-only requests
+retain their meaning. The issuer-key fingerprint exposed by the handler can be
+bound into durable local enrollment; it does not install or rotate trust itself.
 
 The [client SDK](client/README.md) is now extracted from the existing Go CLI.
 Additional languages, a provider bridge, multiple database processes, and complete

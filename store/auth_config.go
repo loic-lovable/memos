@@ -30,6 +30,9 @@ type AuthenticationConfigMutation struct {
 
 // UpsertInstanceGeneralSettingSafely validates and stores GENERAL as one serialized operation.
 func (s *Store) UpsertInstanceGeneralSettingSafely(ctx context.Context, setting *storepb.InstanceSetting) (*storepb.InstanceSetting, error) {
+	if s.shrimpPilot {
+		return nil, ErrShrimpNativeAdministration
+	}
 	if setting == nil || setting.Key != storepb.InstanceSettingKey_GENERAL || setting.GetGeneralSetting() == nil {
 		return nil, errors.New("GENERAL instance setting is required")
 	}

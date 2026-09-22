@@ -91,6 +91,10 @@ func TestPreparedOperationsSurviveLostReplyAndClientRestart(t *testing.T) {
 				receipt["accepted_at"], receipt["terminal_at"] = "2026-09-18T00:00:00Z", "2026-09-18T00:00:01Z"
 				receipt["results_retained_until"], receipt["min_result_retention_seconds"] = "2026-09-20T00:10:00Z", 172800
 				receipt["commit"] = map[string]any{"state": "committed", "causal_token": "token", "resources": []any{map[string]any{"command_id": "c1", "resource": map[string]any{"type": "subject", "id": "s1"}, "revision": "r2"}}}
+				if action == "create_subject" {
+					commit := receipt["commit"].(map[string]any)
+					commit["resources"] = append(commit["resources"].([]any), map[string]any{"command_id": "c1", "resource": map[string]any{"type": "source_reference", "id": "source-1"}, "revision": "source-r1"})
+				}
 				receipt["effects"] = []any{}
 				if action == "disable" {
 					receipt["effects"] = []any{map[string]any{"id": "e1", "kind": "admission_block", "resource": map[string]any{"type": "subject", "id": "s1"}, "consumer": "memos", "state": "complete", "deadline": "2026-09-18T00:00:01Z", "observed_frontier": "token", "error": nil}}

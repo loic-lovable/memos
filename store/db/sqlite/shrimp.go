@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lovablelabs/shrimp-protocol/sdk/go/profiles/scalar"
 	"github.com/pkg/errors"
 	modernsqlite "modernc.org/sqlite"
 
@@ -17,7 +18,35 @@ import (
 	"github.com/usememos/memos/store"
 )
 
-var errShrimpConflict = errors.New("mutation_rejected")
+var (
+	errShrimpConflict   = errors.New("invalid_request")
+	errShrimpRevision   = errors.New("revision_conflict")
+	errShrimpTransition = errors.New("invalid_lifecycle_transition")
+	errShrimpIdentity   = errors.New("resource_not_found")
+)
+
+func shrimpRejection(err error) string {
+	if code := shrimpHumanRejection(err); code != "" {
+		return code
+	}
+	switch {
+	case errors.Is(err, errShrimpRevision):
+		return "revision_conflict"
+	case errors.Is(err, errShrimpTransition):
+		return "invalid_lifecycle_transition"
+	case errors.Is(err, errShrimpIdentity), errors.Is(err, sql.ErrNoRows):
+		return "resource_not_found"
+	case errors.Is(err, scalar.ErrAuthority), errors.Is(err, store.ErrLastSpaceAdmin):
+		return "authority_conflict"
+	case errors.Is(err, scalar.ErrInvalid), errors.Is(err, errShrimpConflict):
+		return "invalid_request"
+	}
+	var constraint *modernsqlite.Error
+	if errors.As(err, &constraint) && (constraint.Code() == 1555 || constraint.Code() == 2067) {
+		return "identity_conflict"
+	}
+	return ""
+}
 
 const shrimpColumns = "id, user_id, source_id, source_revision, source_reference, revision, lifecycle, display_name, attributes, attribute_profile, human_attributes"
 
@@ -69,6 +98,9 @@ func (d *DB) ShrimpWindow(ctx context.Context, principal string) (string, int64,
 		return "", 0, err
 	}
 	defer tx.Rollback()
+	if err := shrimpWriterAllowed(ctx, tx); err != nil {
+		return "", 0, err
+	}
 	if err = collectShrimpHistory(ctx, tx, now); err != nil {
 		return "", 0, err
 	}
@@ -155,6 +187,9 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 	if m.RecoverOnly {
 		return nil, store.ErrShrimpInsufficientScope
 	}
+	if err := shrimpWriterAllowed(ctx, tx); err != nil {
+		return nil, err
+	}
 	var count int
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM shrimp_operation").Scan(&count); err != nil {
 		return nil, err
@@ -173,7 +208,7 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 	if now >= closes {
 		return nil, store.ErrShrimpOperationResultUnavailable
 	}
-	result := &store.ShrimpResult{Time: now, RetainedUntil: max(closes, now) + 86400, Action: m.Action, CommandID: m.CommandID}
+	result := &store.ShrimpResult{Time: now, RetainedUntil: max(closes, now) + 86400, Action: m.Action, Lifecycle: m.Lifecycle, CommandID: m.CommandID}
 	if m.Deadline <= now || m.Deadline > closes {
 		result.Error = "execution_deadline_expired"
 	}
@@ -193,20 +228,14 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 		}
 		subject, err := applyShrimpAccount(ctx, tx, m)
 		if err != nil {
-			var sqliteErr *modernsqlite.Error
-			code := shrimpHumanRejection(err)
-			expected := code != "" || errors.Is(err, errShrimpConflict) || errors.Is(err, sql.ErrNoRows) || errors.Is(err, store.ErrLastSpaceAdmin) ||
-				(errors.As(err, &sqliteErr) && sqliteErr.Code()&255 == 19)
-			if !expected {
+			code := shrimpRejection(err)
+			if code == "" {
 				return nil, err
 			}
 			if _, rollbackErr := tx.ExecContext(ctx, "ROLLBACK TO business"); rollbackErr != nil {
 				return nil, rollbackErr
 			}
 			result.Error = code
-			if result.Error == "" {
-				result.Error = "mutation_rejected"
-			}
 		} else {
 			result.Subject = *subject
 			result.Token, err = shrimpEvent(ctx, tx, subject, m.Principal, m.Action)
@@ -296,8 +325,14 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 	if err != nil {
 		return nil, err
 	}
-	if s.ID != m.SubjectID || s.Revision != m.ExpectedRevision || s.Lifecycle == "retired" {
-		return nil, errShrimpConflict
+	if s.ID != m.SubjectID {
+		return nil, errShrimpIdentity
+	}
+	if s.Revision != m.ExpectedRevision {
+		return nil, errShrimpRevision
+	}
+	if s.Lifecycle == "retired" {
+		return nil, errShrimpTransition
 	}
 	revision := random.UUID()
 	state, err := prepareShrimpAttributes(ctx, tx, s, m, revision)
@@ -309,24 +344,46 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 		return nil, err
 	}
 	update := &store.UpdateUser{ID: s.UserID}
-	switch m.Action {
+	action := m.Action
+	if m.Action == "update_subject" {
+		if m.Lifecycle != "" && m.AttributeProfile == "" && m.Set != nil && len(m.Set)+len(m.Clear) == 0 {
+			return nil, errShrimpConflict
+		}
+		if _, set := m.Set["displayName"]; s.AttributeProfile != "" || set || m.Set == nil || slices.Contains(m.Clear, "displayName") {
+			update.Nickname = &s.DisplayName
+		}
+		switch m.Lifecycle {
+		case "":
+		case "active":
+			action = "activate"
+		case "disabled":
+			action = "disable"
+		case "retired":
+			action = "retire"
+		default:
+			return nil, errShrimpConflict
+		}
+	} else if m.Lifecycle != "" {
+		return nil, errShrimpConflict
+	}
+	switch action {
 	case "activate":
 		if s.Lifecycle != "disabled" {
-			return nil, errShrimpConflict
+			return nil, errShrimpTransition
 		}
 		s.Lifecycle = "active"
 		state := store.Normal
 		update.RowStatus = &state
 	case "disable":
 		if s.Lifecycle != "active" && s.Lifecycle != "disabled" {
-			return nil, errShrimpConflict
+			return nil, errShrimpTransition
 		}
 		s.Lifecycle = "disabled"
 		state := store.Archived
 		update.RowStatus = &state
 	case "retire":
 		if s.Lifecycle != "active" && s.Lifecycle != "disabled" {
-			return nil, errShrimpConflict
+			return nil, errShrimpTransition
 		}
 		s.Lifecycle = "retired"
 		state := store.Archived
@@ -334,9 +391,6 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 	case "migrate_human_attributes":
 		update.Nickname = &s.DisplayName
 	case "update_subject":
-		if _, set := m.Set["displayName"]; s.AttributeProfile != "" || set || m.Set == nil || slices.Contains(m.Clear, "displayName") {
-			update.Nickname = &s.DisplayName
-		}
 	default:
 		return nil, errShrimpConflict
 	}

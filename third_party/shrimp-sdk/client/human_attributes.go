@@ -93,6 +93,20 @@ func (c *Client) PrepareHumanCreate(ctx context.Context, p *humanattributes.Prof
 // observed subject revision. The target checks current field ownership and email
 // generations; a conflict never causes this client to refresh or replace intent.
 func (c *Client) PrepareHumanUpdate(ctx context.Context, p *humanattributes.Profile, s SubjectVersion, changes humanattributes.Changes) (Intent, error) {
+	return c.prepareHumanUpdate(ctx, p, s, changes, "")
+}
+
+// PrepareHumanUpdateLifecycle combines a nonempty typed attribute change with
+// active, disabled or retired lifecycle under one revision and operation identity.
+// All requested ownership and lifecycle checks apply atomically at the target.
+func (c *Client) PrepareHumanUpdateLifecycle(ctx context.Context, p *humanattributes.Profile, s SubjectVersion, changes humanattributes.Changes, lifecycle string) (Intent, error) {
+	if err := validateLifecycle(lifecycle); err != nil {
+		return Intent{}, err
+	}
+	return c.prepareHumanUpdate(ctx, p, s, changes, lifecycle)
+}
+
+func (c *Client) prepareHumanUpdate(ctx context.Context, p *humanattributes.Profile, s SubjectVersion, changes humanattributes.Changes, lifecycle string) (Intent, error) {
 	if err := c.humanAttributeProfile(p); err != nil {
 		return Intent{}, err
 	}
@@ -113,11 +127,15 @@ func (c *Client) PrepareHumanUpdate(ctx context.Context, p *humanattributes.Prof
 	if _, err := p.DecodeChanges(raw); err != nil {
 		return Intent{}, err
 	}
-	return c.prepareProfiles(ctx, s.Authority, map[string]any{
+	command := map[string]any{
 		"command_id": "c1", "action": "update_subject", "resource": map[string]any{"type": "subject", "id": s.ID},
 		"expected_revision": s.Revision, "attribute_profile": humanattributes.ID,
 		"set": changes.Set, "clear": changes.Clear,
-	}, humanAttributeProfiles)
+	}
+	if lifecycle != "" {
+		command["lifecycle"] = lifecycle
+	}
+	return c.prepareProfiles(ctx, s.Authority, command, humanAttributeProfiles)
 }
 
 // PendingHumanMigration is a fixed, enrollment-bound proposal awaiting a trusted

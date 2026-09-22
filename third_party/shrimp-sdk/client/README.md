@@ -41,8 +41,16 @@ intent, err := peer.PrepareCreate(ctx, client.Human{
 if err != nil {
     return err
 }
-receipt, err := peer.Submit(ctx, intent, saveIntent)
+outcome, err := peer.SubmitTyped(ctx, intent, saveIntent)
 // Keep the saved intent even if err != nil. The outcome may be unknown.
+if err != nil {
+    return err
+}
+if outcome.State() != client.OutcomeSucceeded {
+    // Persist the receipt for inspection; do not acknowledge success upstream.
+    // Pending, failed and superseded are valid receipts with nil call error.
+    return fmt.Errorf("provisioning outcome: %s", outcome.State())
+}
 ```
 
 Here `peer` is an authenticated, discovered client and `saveIntent` is your storage
@@ -64,6 +72,66 @@ by matching email.
 clear preserves its owner with a null value. The target must implement this scalar
 surface; the SDK cannot add it to an older application adapter. These helpers do
 not select `human-attributes-v1` or publish verified email assertions.
+
+## Typed observations and outcomes
+
+`ReadHuman(ctx, id)` wraps `ReadSubject` with a `HumanRecord`. Use `Version()`
+to carry its exact ID, revision and authority into a later conditional decision.
+`ScalarAttributes` contains compatibility facts; `HumanAttributes` contains the
+selected rich facts. Each retains its owner and revision. A missing fact, owned
+null and empty value remain distinct. The optional `Enterprise` JSON value is
+preserved without interpreting its context or changing permissions.
+
+Reads validate the wire record without applying today's email limits or timezone
+catalog to historical values. A read is an observation, not authorization to
+refresh a stale decision automatically.
+
+`SubmitTyped` and `RecoverTyped` return `Outcome` and preserve all checks and
+durable-intent behavior of `Submit` and `Recover`. The original map-returning APIs
+remain available. Always inspect `outcome.State()`:
+
+| Outcome | Meaning |
+|---|---|
+| `OutcomeSucceeded` | The validated receipt reports commit and completed required effects |
+| `OutcomePending` | The operation or its effects are unfinished; inspect `PollAfterSeconds` and recover the same intent |
+| `OutcomeFailed` | The recorded operation failed; `Receipt.Commit.State` distinguishes precommit rejection from a committed effect failure |
+| `OutcomeSuperseded` | This historical operation was superseded; inspect its recorded replacement and commit state |
+| `OutcomeUnknown` | No trusted receipt is available; an error or zero outcome never proves rollback |
+
+A nil Go error means a validated receipt was obtained, not that provisioning
+succeeded. The typed receipt retains scope, operation identity, resource revisions,
+causal token, individual effects, error details and original retention promises.
+These are historical target statements, not proof of current account state or
+independently observed enforcement. Constructing or JSON-decoding the public
+receipt struct yourself does not perform the client's validation.
+
+## Atomic attributes and lifecycle
+
+`PrepareUpdateLifecycle(ctx, version, scalarChanges, lifecycle)` adds an explicit
+`active`, `disabled` or `retired` lifecycle to one nonempty attribute update.
+`PrepareHumanUpdateLifecycle` provides the same operation for typed attributes.
+Both use one subject revision, operation identity and target transaction. They
+never split the request into separate writes. Any committed disable or retirement
+must include completed admission-block evidence for the same subject, even when
+other effects leave the operation pending or failed.
+
+Every requested field and lifecycle action must be authorized. An invalid field
+also prevents disable or retirement in this combined operation. If admission must
+stop regardless of cleanup success, make that a separately authorized disable
+decision. A compound operation cannot silently fall back to that policy.
+
+The server adapter must explicitly implement the combined contract; accepting its
+schema or advertising a command count alone is insufficient. Existing update-only
+and lifecycle-only helpers keep their original request shapes.
+
+## Run a complete example
+
+The [provision example](../examples/provision/README.md) provides explicit create,
+read, update, activate, disable, recover and retry commands. Each mutation uses a
+separate private job directory. It saves and syncs the intent before submission,
+requires the originally observed revision, and refuses to replace an existing job
+with a new decision. Recovery uses read authority without discovery. The example
+uses scalar attributes so it can run against the current partial Memos pilot.
 
 ## Typed human attributes and migration
 

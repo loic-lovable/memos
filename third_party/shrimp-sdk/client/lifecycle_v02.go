@@ -104,39 +104,60 @@ func (c *Client) lifecycleReceipt02(receipt map[string]any, subject, action, pre
 	if receipt["state"] != "succeeded" || commit["state"] != "committed" {
 		return "", unavailable("lifecycle operation did not succeed; inspect its saved identity")
 	}
+	if err := committedHumanReceipt02(receipt, subject, action, previous, "c1"); err != nil {
+		return "", err
+	}
+	return commit["causal_token"].(string), nil
+}
+
+// committedHumanReceipt02 follows structural/scope validation and checks the
+// original command whenever a receipt claims a commit, independently of whether
+// its asynchronous effects have succeeded yet.
+func committedHumanReceipt02(receipt map[string]any, subject, action, previous, command string) error {
+	commit := receipt["commit"].(map[string]any)
 	resources := commit["resources"].([]any)
-	found := false
+	found, sourceFound := false, false
 	for _, item := range resources {
 		value := item.(map[string]any)
 		ref := value["resource"].(map[string]any)
+		if value["command_id"] != command {
+			return errors.New("lifecycle receipt identifies a different command")
+		}
 		if ref["type"] == "subject" {
-			if found || ref["id"] != subject || value["revision"] == previous || (action != "create_subject" && value["command_id"] != "c1") {
-				return "", errors.New("lifecycle receipt has a different subject, command or unchanged revision")
+			if found || ref["id"] != subject || value["revision"] == previous {
+				return errors.New("lifecycle receipt has a different subject or unchanged revision")
 			}
 			found = true
-		} else if action != "create_subject" || ref["type"] != "source_reference" {
-			return "", errors.New("lifecycle receipt includes an unexpected resource")
+		} else if action != "create_subject" || ref["type"] != "source_reference" || sourceFound {
+			return errors.New("lifecycle receipt includes an unexpected resource")
+		} else {
+			sourceFound = true
 		}
 	}
 	if !found {
-		return "", errors.New("lifecycle receipt omits the subject revision")
+		return errors.New("lifecycle receipt omits the subject revision")
 	}
-	effects := receipt["effects"].([]any)
-	if action == "disable" {
-		if len(effects) == 0 {
-			return "", errors.New("disable receipt omits its admission block")
-		}
-		for _, item := range effects {
-			effect := item.(map[string]any)
+	needsAdmission, admission := action == "disable" || action == "retire", false
+	for _, item := range receipt["effects"].([]any) {
+		effect := item.(map[string]any)
+		switch effect["kind"] {
+		case "admission_block":
 			ref := effect["resource"].(map[string]any)
-			if effect["kind"] != "admission_block" || effect["state"] != "complete" || ref["type"] != "subject" || ref["id"] != subject {
-				return "", errors.New("disable receipt has no completed admission block for this subject")
+			if !needsAdmission || effect["state"] != "complete" || ref["type"] != "subject" || ref["id"] != subject {
+				return errors.New("lifecycle receipt has an invalid admission block for this subject")
 			}
+			admission = true
+		case "membership_projection", "assignment_projection", "profile":
+			// These may remain pending or fail after the core commit. The receipt
+			// schema still requires all effects complete before overall success.
+		default:
+			return errors.New("unexpected lifecycle effect")
 		}
-	} else if len(effects) != 0 {
-		return "", errors.New("unexpected lifecycle effect")
 	}
-	return commit["causal_token"].(string), nil
+	if needsAdmission && !admission {
+		return errors.New("lifecycle receipt omits its admission block")
+	}
+	return nil
 }
 
 func (c *Client) lifecycle02(ctx context.Context, subject, action string, save SaveIntent) error {

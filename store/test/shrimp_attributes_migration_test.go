@@ -42,7 +42,7 @@ func TestMigrationShrimpScalarFactsPreservesLegacyValueAndRevision(t *testing.T)
 // the older schema before applying migrations again.
 func removeShrimpTypedSchema(ctx context.Context, t *testing.T, ts *store.Store) {
 	t.Helper()
-	for _, query := range []string{"ALTER TABLE shrimp_subject DROP COLUMN attribute_profile", "ALTER TABLE shrimp_subject DROP COLUMN human_attributes", "DROP TABLE shrimp_attribute_approval"} {
+	for _, query := range []string{"ALTER TABLE shrimp_subject DROP COLUMN attribute_profile", "ALTER TABLE shrimp_subject DROP COLUMN human_attributes", "DROP TABLE shrimp_attribute_approval", "DROP TABLE shrimp_policy"} {
 		_, err := ts.GetDriver().GetDB().ExecContext(ctx, query)
 		require.NoError(t, err)
 	}

@@ -66,6 +66,7 @@ func New(ctx context.Context, s *store.Store, config Config) (*Handler, error) {
 		Tenant: "acme", Domain: "A", HistoryEpoch: "memos-pilot-1", DiscoveryRevision: "memos-pilot-3",
 		AdmissionConsumer:           "memos-session-refresh-pat",
 		ScalarAttributes:            true,
+		AtomicSubjectUpdates:        true,
 		ExperimentalHumanAttributes: config.ExperimentalHumanAttributes,
 		HealthyConditions:           "Disposable single-process SQLite pilot with at most 10000 unexpired retained operation results. Only listed operations, one human command per mutation, source reference required on creation; exact displayName, department and scalar email with owned set/clear. No complete profile, public audit, sync, existing-session revocation, backup restore, or multi-process admission guarantee.",
 	})
@@ -82,6 +83,15 @@ func New(ctx context.Context, s *store.Store, config Config) (*Handler, error) {
 	}
 	enrollment, _ := json.Marshal(identity)
 	if err := s.EnableShrimpPilot(ctx, string(enrollment)); err != nil {
+		return nil, err
+	}
+	policy, ok := driver.(interface {
+		ConfigureShrimpPolicy(context.Context, string, bool) error
+	})
+	if !ok {
+		return nil, errors.New("SHRIMP policy storage unavailable")
+	}
+	if err := policy.ConfigureShrimpPolicy(ctx, protocol.IssuerKeyFingerprint(), config.AllowWrite); err != nil {
 		return nil, err
 	}
 	if len(config.HumanAttributeApprovals) > 0 {

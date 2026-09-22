@@ -39,7 +39,7 @@ func (s *APIV1Service) ListLinkedIdentities(ctx context.Context, request *v1pb.L
 
 func (s *APIV1Service) CreateLinkedIdentity(ctx context.Context, request *v1pb.CreateLinkedIdentityRequest) (*v1pb.LinkedIdentity, error) {
 	if s.Store.ShrimpPilotEnabled() {
-		return nil, status.Error(codes.PermissionDenied, store.ErrShrimpNativeAdministration.Error())
+		return nil, s.refuseNativeAdministration(ctx, "create_linked_identity")
 	}
 	user, err := s.resolveUserFromName(ctx, request.Parent)
 	if err != nil {
@@ -109,7 +109,7 @@ func (s *APIV1Service) GetLinkedIdentity(ctx context.Context, request *v1pb.GetL
 
 func (s *APIV1Service) DeleteLinkedIdentity(ctx context.Context, request *v1pb.DeleteLinkedIdentityRequest) (*emptypb.Empty, error) {
 	if s.Store.ShrimpPilotEnabled() {
-		return nil, status.Error(codes.PermissionDenied, store.ErrShrimpNativeAdministration.Error())
+		return nil, s.refuseNativeAdministration(ctx, "delete_linked_identity")
 	}
 	user, provider, err := s.resolveUserAndLinkedIdentityProviderFromName(ctx, request.Name)
 	if err != nil {

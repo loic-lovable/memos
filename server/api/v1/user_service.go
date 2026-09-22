@@ -194,6 +194,9 @@ func (s *APIV1Service) GetUser(ctx context.Context, request *v1pb.GetUserRequest
 func (s *APIV1Service) CreateUser(ctx context.Context, request *v1pb.CreateUserRequest) (*v1pb.User, error) {
 	// Get current user (might be nil for unauthenticated requests)
 	currentUser, _ := s.fetchCurrentUser(ctx)
+	if s.Store.ShrimpPilotEnabled() && currentUser != nil {
+		return nil, s.refuseNativeAdministration(ctx, "create_native_account")
+	}
 
 	if request.User == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "user is required")

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -31,6 +32,9 @@ func TestAdmissionTransportFlushesBeforeDisableCompletes(t *testing.T) {
 	ctx := t.Context()
 	require.NoError(t, s.Migrate(ctx))
 	require.NoError(t, s.EnableShrimpPilot(ctx, "https://pilot.example/shrimp/v1/tenants/acme/domains/A"))
+	require.NoError(t, s.GetDriver().(interface {
+		ConfigureShrimpPolicy(context.Context, string, bool) error
+	}).ConfigureShrimpPolicy(ctx, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", true))
 	driver := d.(store.ShrimpDriver)
 	mutation := func(action string, subject store.ShrimpSubject) store.ShrimpMutation {
 		window, deadline, err := driver.ShrimpWindow(ctx, "hr")

@@ -161,7 +161,7 @@ func journalShrimpOutcome(ctx context.Context, tx *sql.Tx, m store.ShrimpMutatio
 			if err := appendShrimpAudit(ctx, tx, event); err != nil {
 				return err
 			}
-			if m.Action == "disable" || m.Action == "retire" {
+			if result.Action == "disable" || result.Action == "retire" || result.Lifecycle == "disabled" || result.Lifecycle == "retired" {
 				event.Kind, event.Stage, event.Effect = "effect", "effect", "admission_block_complete"
 				if err := appendShrimpAudit(ctx, tx, event); err != nil {
 					return err

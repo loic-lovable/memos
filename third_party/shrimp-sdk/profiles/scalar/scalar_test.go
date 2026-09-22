@@ -16,7 +16,9 @@ func TestValidate(t *testing.T) {
 		valid  bool
 	}{
 		{name: "empty", valid: true},
-		{name: "value validation deferred", change: scalar.Changes{Set: map[string]string{"email": "\xff"}}, valid: true},
+		{name: "invalid UTF-8", change: scalar.Changes{Set: map[string]string{"email": "\xff"}}},
+		{name: "too long", change: scalar.Changes{Set: map[string]string{"displayName": strings.Repeat("界", 1025)}}},
+		{name: "maximum Unicode scalars", change: scalar.Changes{Set: map[string]string{"displayName": strings.Repeat("界", 1024)}}, valid: true},
 		{name: "unknown set", change: scalar.Changes{Set: map[string]string{"locale": "en"}}},
 		{name: "unknown clear", change: scalar.Changes{Clear: []string{"locale"}}},
 		{name: "duplicate clear", change: scalar.Changes{Clear: []string{"email", "email"}}},

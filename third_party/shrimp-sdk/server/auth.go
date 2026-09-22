@@ -82,7 +82,7 @@ func (h *Handler) authenticate(r *http.Request) (_ *accessClaims, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if claims.IssuedAt == nil || claims.ExpiresAt == nil || claims.ExpiresAt.Sub(claims.IssuedAt.Time) > 300*time.Second || claims.ID == "" || claims.ClientID != h.config.ClientID || claims.Subject != claims.ClientID || claims.Confirmation.Thumbprint == "" {
+	if len(claims.Audience) != 1 || claims.Audience[0] != h.config.Resource || claims.IssuedAt == nil || claims.ExpiresAt == nil || claims.ExpiresAt.Sub(claims.IssuedAt.Time) > 300*time.Second || claims.ID == "" || claims.ClientID != h.config.ClientID || claims.Subject != claims.ClientID || claims.Confirmation.Thumbprint == "" {
 		return nil, errors.New("invalid access claims")
 	}
 	failureCode = "invalid_dpop_proof"

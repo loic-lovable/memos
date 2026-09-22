@@ -99,7 +99,14 @@ func TestShrimpAttributeChangesRejectWholly(t *testing.T) {
 			}
 			rejected, err := s.ApplyShrimp(ctx, update)
 			require.NoError(t, err)
-			require.Equal(t, "mutation_rejected", rejected.Error)
+			code := "invalid_request"
+			if test.stale {
+				code = "revision_conflict"
+			}
+			if test.foreign {
+				code = "authority_conflict"
+			}
+			require.Equal(t, code, rejected.Error)
 			after, _, err := d.ReadShrimp(ctx, subject.ID, nil)
 			require.NoError(t, err)
 			require.Equal(t, before, after)
