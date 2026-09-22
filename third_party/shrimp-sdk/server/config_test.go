@@ -28,6 +28,7 @@ func TestNewUsesExplicitApplicationDeclarationsWithoutCallingStorage(t *testing.
 		schema := `{"$id":"https://shrimp.example/schemas/0.2/` + name + `-v0.2.schema.json","type":"object","$defs":{"request":{"type":"object"},"read_request":{"type":"object"},"read_response":{"type":"object"},"enumeration_request":{"type":"object"},"enumeration_page":{"type":"object"}}}`
 		require.NoError(t, os.WriteFile(filepath.Join(dir, name+"-v0.2.schema.json"), []byte(schema), 0600))
 	}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "human-attributes-v1.schema.json"), []byte(`{"$id":"https://shrimp.example/schemas/0.2/human-attributes-v1.schema.json","type":"object"}`), 0600))
 	config := Config{Resource: "https://app.example/provisioning", Issuer: "https://issuer.example", IssuerKeyID: "key", IssuerKeyFile: keyFile, ClientID: "client", Authority: "hr", SchemaDirectory: dir, Tenant: "other-tenant", Domain: "other-domain", HistoryEpoch: "history-9", DiscoveryRevision: "discovery-7", AdmissionConsumer: "native-login", HealthyConditions: "Single application process under its own admission lock."}
 	// Embedding a nil Application makes every unexpected storage call panic.
 	h, err := New(context.Background(), &lookupApp{}, config)
@@ -39,6 +40,7 @@ func TestNewUsesExplicitApplicationDeclarationsWithoutCallingStorage(t *testing.
 	contract := h.discovery["versions"].([]any)[0].(map[string]any)
 	require.Equal(t, config.HealthyConditions, contract["healthy_conditions"])
 	require.Empty(t, contract["profiles"])
+	require.Contains(t, h.schemas, "human-attributes-v1.schema.json")
 	require.Equal(t, []string{"other-domain"}, contract["dependency_issuers"].([]any)[0].(map[string]any)["domains"])
 	for _, field := range []string{"tenant", "domain", "history", "revision", "consumer", "conditions"} {
 		t.Run(field, func(t *testing.T) {

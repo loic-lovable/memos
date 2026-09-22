@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.1/subject-read.schema.json",
+  "$comment": "Candidate schemas; the .example identifier is not a hosted retrieval URL. Resolve references from this directory. Semantic and Unicode/duplicate-member checks also apply.",
+  "title": "Candidate full-subject read request or response",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/response"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1"
+        },
+        "resource": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "subject"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "representation": {
+          "const": "subject"
+        },
+        "required_dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "wait_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "schema_version",
+        "resource",
+        "representation",
+        "required_dependencies",
+        "wait_ms"
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "$ref": "subject.schema.json"
+        },
+        "observed_frontier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state_validator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "validator_expires_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        }
+      },
+      "required": [
+        "resource",
+        "observed_frontier",
+        "state_validator"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

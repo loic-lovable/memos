@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.2/bindings-v0.2.schema.json",
+  "title": "SHRIMP 0.2 common binding keys",
+  "$defs": {
+    "oidc_sub_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[\\x00-\\x7f]+$"
+    },
+    "x509_sha256_key": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "mechanism": {
+      "oneOf": [
+        {
+          "enum": [
+            "oidc-sub-v1",
+            "x509-sha256-v1"
+          ]
+        },
+        {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^https://[^/?#]+/[^?#]+$"
+        }
+      ]
+    },
+    "key_contract": {
+      "type": "object",
+      "properties": {
+        "mechanism": {
+          "$ref": "bindings-v0.2.schema.json#/$defs/mechanism"
+        },
+        "identity_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "mechanism",
+        "identity_key"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mechanism": {
+                "const": "oidc-sub-v1"
+              }
+            },
+            "required": [
+              "mechanism"
+            ]
+          },
+          "then": {
+            "properties": {
+              "identity_key": {
+                "$ref": "bindings-v0.2.schema.json#/$defs/oidc_sub_key"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mechanism": {
+                "const": "x509-sha256-v1"
+              }
+            },
+            "required": [
+              "mechanism"
+            ]
+          },
+          "then": {
+            "properties": {
+              "identity_key": {
+                "$ref": "bindings-v0.2.schema.json#/$defs/x509_sha256_key"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

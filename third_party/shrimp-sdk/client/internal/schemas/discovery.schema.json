@@ -1,0 +1,769 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.1/discovery.schema.json",
+  "title": "SHRIMP capability discovery, candidate bootstrap 0.1",
+  "type": "object",
+  "required": [
+    "discovery_version",
+    "resource",
+    "scope",
+    "discovery_revision",
+    "versions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "discovery_version": {
+      "const": "0.1"
+    },
+    "resource": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "type": "object",
+      "required": [
+        "tenant",
+        "domain"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tenant": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "discovery_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "versions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "schema_version",
+          "authentication_profile",
+          "subject_profiles",
+          "binding_mechanisms",
+          "capabilities",
+          "operations",
+          "schemas",
+          "limits",
+          "quota_scope",
+          "retrieval",
+          "groups",
+          "audit"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "schema_version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "authentication_profile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject_profiles": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "binding_mechanisms": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "operations": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "schemas": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "path",
+                "sha256"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:"
+                },
+                "path": {
+                  "type": "string",
+                  "pattern": "^/schemas/[A-Za-z0-9][A-Za-z0-9._-]*\\.json$",
+                  "not": {
+                    "pattern": "\\.\\."
+                  }
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            }
+          },
+          "limits": {
+            "type": "object",
+            "required": [
+              "max_request_bytes",
+              "max_response_bytes",
+              "max_json_depth",
+              "max_commands",
+              "max_required_dependencies",
+              "max_required_capabilities",
+              "max_wait_ms",
+              "max_execute_ahead_seconds",
+              "max_replay_window_seconds",
+              "min_result_retention_after_window_seconds",
+              "min_causal_token_lifetime_seconds",
+              "min_state_validator_lifetime_seconds"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "max_request_bytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_response_bytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_json_depth": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_commands": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_required_dependencies": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_required_capabilities": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_wait_ms": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "max_execute_ahead_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_replay_window_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "min_result_retention_after_window_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "min_causal_token_lifetime_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "min_state_validator_lifetime_seconds": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "quota_scope": {
+            "enum": [
+              "tenant",
+              "tenant_principal",
+              "tenant_domain_principal"
+            ]
+          },
+          "retrieval": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "max_page_records",
+                  "max_open_snapshots_per_principal",
+                  "min_snapshot_lifetime_seconds",
+                  "min_change_history_retention_seconds",
+                  "min_cursor_lifetime_seconds",
+                  "min_poll_after_seconds",
+                  "idle_poll_after_seconds",
+                  "max_retry_after_seconds",
+                  "max_healthy_observation_lag_seconds"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "max_page_records": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_open_snapshots_per_principal": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "min_snapshot_lifetime_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "min_change_history_retention_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "min_cursor_lifetime_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "min_poll_after_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "idle_poll_after_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_retry_after_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_healthy_observation_lag_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            ]
+          },
+          "groups": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "max_depth",
+                  "max_direct_members"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "max_depth": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_direct_members": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "wire_profile": {
+                    "const": "nested-groups-0.1"
+                  },
+                  "max_live_groups": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_edges_per_domain": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_atomic_edge_commands": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8
+                  },
+                  "max_witness_edges": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "inventory_view": {
+                    "const": "group-graph"
+                  },
+                  "max_snapshot_page_records": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 32
+                  },
+                  "max_change_page_transactions": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 32
+                  },
+                  "max_transaction_records": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8
+                  },
+                  "projection": {
+                    "const": "synchronous-primary"
+                  },
+                  "visibility": {
+                    "const": "complete-domain"
+                  },
+                  "change_unit": {
+                    "const": "whole-transaction"
+                  }
+                },
+                "dependentRequired": {
+                  "wire_profile": [
+                    "change_unit",
+                    "inventory_view",
+                    "max_atomic_edge_commands",
+                    "max_change_page_transactions",
+                    "max_edges_per_domain",
+                    "max_live_groups",
+                    "max_snapshot_page_records",
+                    "max_transaction_records",
+                    "max_witness_edges",
+                    "projection",
+                    "visibility"
+                  ],
+                  "max_live_groups": [
+                    "change_unit",
+                    "inventory_view",
+                    "max_atomic_edge_commands",
+                    "max_change_page_transactions",
+                    "max_edges_per_domain",
+                    "max_snapshot_page_records",
+                    "max_transaction_records",
+                    "max_witness_edges",
+                    "projection",
+                    "visibility",
+                    "wire_profile"
+                  ],
+                  "max_edges_per_domain": [
+                    "change_unit",
+                    "inventory_view",
+                    "max_atomic_edge_commands",
+                    "max_change_page_transactions",
+                    "max_live_groups",
+                    "max_snapshot_page_records",
+                    "max_transaction_records",
+                    "max_witness_edges",
+                    "projection",
+                    "visibility",
+                    "wire_profile"
+                  ],
+                  "max_atomic_edge_commands": [
+                    "change_unit",
+                    "inventory_view",
+                    "max_change_page_transactions",
+                    "max_edges_per_domain",
+                    "max_live_groups",
+                    "max_snapshot_page_records",
+                    "max_transaction_records",
+                    "max_witness_edges",
+                    "projection",
+                    "visibility",
+                    "wire_profile"
+                  ],
+                  "max_witness_edges": [
+                    "change_unit",
+                    "inventory_view",
+                    "max_atomic_edge_commands",
+                    "max_change_page_transactions",
+                    "max_edges_per_domain",
+                    "max_live_groups",
+                    "max_snapshot_page_records",
+                    "max_transaction_records",
+                    "projection",
+                    "visibility",
+                    "wire_profile"
+                  ],
+                  "inventory_view": [
+                    "change_unit",
+                    "max_atomic_edge_commands",
+                    "max_change_page_transactions",
+                    "max_edges_per_domain",
+                    "max_live_groups",
+                    "max_snapshot_page_records",
+                    "max_transaction_records",
+                    "max_witness_edges",
+                    "projection",
+                    "visibility",
+                    "wire_profile"
+                  ],
+                  "max_snapshot_page_records": [
+                    "change_unit",
+                    "inventory_view",
+                    "max_atomic_edge_commands",
+                    "max_change_page_transactions",
+                    "max_edges_per_domain",
+                    "max_live_groups",
+                    "max_transaction_records",
+                    "max_witness_edges",
+                    "projection",
+                    "visibility",
+                    "wire_profile"
+                  ],
+                  "max_change_page_transactions": [
+                    "change_unit",
+                    "inventory_view",
+                    "max_atomic_edge_commands",
+                    "max_edges_per_domain",
+                    "max_live_groups",
+                    "max_snapshot_page_records",
+                    "max_transaction_records",
+                    "max_witness_edges",
+                    "projection",
+                    "visibility",
+                    "wire_profile"
+                  ],
+                  "max_transaction_records": [
+                    "change_unit",
+                    "inventory_view",
+                    "max_atomic_edge_commands",
+                    "max_change_page_transactions",
+                    "max_edges_per_domain",
+                    "max_live_groups",
+                    "max_snapshot_page_records",
+                    "max_witness_edges",
+                    "projection",
+                    "visibility",
+                    "wire_profile"
+                  ],
+                  "projection": [
+                    "change_unit",
+                    "inventory_view",
+                    "max_atomic_edge_commands",
+                    "max_change_page_transactions",
+                    "max_edges_per_domain",
+                    "max_live_groups",
+                    "max_snapshot_page_records",
+                    "max_transaction_records",
+                    "max_witness_edges",
+                    "visibility",
+                    "wire_profile"
+                  ],
+                  "visibility": [
+                    "change_unit",
+                    "inventory_view",
+                    "max_atomic_edge_commands",
+                    "max_change_page_transactions",
+                    "max_edges_per_domain",
+                    "max_live_groups",
+                    "max_snapshot_page_records",
+                    "max_transaction_records",
+                    "max_witness_edges",
+                    "projection",
+                    "wire_profile"
+                  ],
+                  "change_unit": [
+                    "inventory_view",
+                    "max_atomic_edge_commands",
+                    "max_change_page_transactions",
+                    "max_edges_per_domain",
+                    "max_live_groups",
+                    "max_snapshot_page_records",
+                    "max_transaction_records",
+                    "max_witness_edges",
+                    "projection",
+                    "visibility",
+                    "wire_profile"
+                  ]
+                }
+              }
+            ]
+          },
+          "audit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "max_page_records",
+                  "min_retention_seconds",
+                  "max_publication_delay_seconds"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "max_page_records": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "min_retention_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_publication_delay_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            ]
+          },
+          "checks": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "resources": {
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "const": "subject"
+                            },
+                            "representation": {
+                              "const": "subject"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "representation"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "const": "group"
+                            },
+                            "representation": {
+                              "const": "group"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "representation"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "const": "edge"
+                            },
+                            "representation": {
+                              "const": "containment"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "representation"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "views": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "human-subjects",
+                        "group-graph"
+                      ]
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "coverage": {
+                    "enum": [
+                      "full-subjects-including-retired-and-owned-facts",
+                      "full-human-subjects-and-direct-group-graph"
+                    ]
+                  },
+                  "comparison": {
+                    "const": "conservative"
+                  },
+                  "consistency": {
+                    "const": "primary-transaction"
+                  },
+                  "cost": {
+                    "type": "object",
+                    "properties": {
+                      "object": {
+                        "const": "single-resource"
+                      },
+                      "unrestricted_inventory": {
+                        "const": "constant"
+                      },
+                      "restricted_inventory": {
+                        "const": "linear-visible-records"
+                      }
+                    },
+                    "required": [
+                      "object",
+                      "unrestricted_inventory",
+                      "restricted_inventory"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "max_inventory_records_scanned": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "min_validator_lifetime_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_healthy_observation_lag_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "derived": {
+                    "type": "array",
+                    "items": {
+                      "const": "effective-membership"
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "required": [
+                  "resources",
+                  "views",
+                  "coverage",
+                  "comparison",
+                  "consistency",
+                  "cost",
+                  "max_inventory_records_scanned",
+                  "min_validator_lifetime_seconds",
+                  "max_healthy_observation_lag_seconds"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "reconciliation": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "client-plan-reference"
+              },
+              "approval": {
+                "const": "local-executor-policy"
+              },
+              "lifecycle": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "activate",
+                    "disable"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "uniqueItems": true
+              },
+              "ordered_steps": {
+                "const": "preceding-receipt"
+              }
+            },
+            "required": [
+              "mode",
+              "approval"
+            ],
+            "additionalProperties": false,
+            "dependentRequired": {
+              "lifecycle": [
+                "ordered_steps"
+              ],
+              "ordered_steps": [
+                "lifecycle"
+              ]
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "operations": {
+                  "contains": {
+                    "const": "check.read"
+                  }
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "checks"
+              ],
+              "properties": {
+                "checks": {
+                  "type": "object"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "checks": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "operations": {
+                  "contains": {
+                    "const": "audit.read"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "audit": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

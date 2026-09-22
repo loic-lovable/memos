@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.2/replay-window-v0.2.schema.json",
+  "title": "SHRIMP 0.2 executable window and retention promises",
+  "$comment": "Draft 0.2. Resolve catalog references locally. Structural validation is separate from authority, clock, equality and lifecycle validation.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "0.2"
+    },
+    "replay_window": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+    },
+    "scope": {
+      "$ref": "common-v0.2.schema.json#/$defs/scope"
+    },
+    "server_time": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "closes_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "results_retained_until": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "min_result_retention_seconds": {
+      "type": "integer",
+      "minimum": 86400
+    }
+  },
+  "required": [
+    "schema_version",
+    "replay_window",
+    "scope",
+    "server_time",
+    "closes_at",
+    "results_retained_until",
+    "min_result_retention_seconds"
+  ],
+  "additionalProperties": false
+}

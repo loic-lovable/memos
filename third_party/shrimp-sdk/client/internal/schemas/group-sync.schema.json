@@ -1,0 +1,388 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.1/group-sync.schema.json",
+  "title": "Bounded complete-domain group graph synchronization",
+  "$comment": "A deliberately narrow wire slice: same-domain, complete subject records, no external dependencies or fragment assembly. Scope, page limits, identity correlation and cursor progress also require semantic validation.",
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "properties": {
+        "tenant": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "domain": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "view": {
+          "const": "group-graph"
+        },
+        "schema_version": {
+          "const": "0.1"
+        }
+      },
+      "required": [
+        "tenant",
+        "domain",
+        "view",
+        "schema_version"
+      ],
+      "additionalProperties": false
+    },
+    "record": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "resource_type": {
+              "const": "subject"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "deleted": {
+              "const": false
+            },
+            "value": {
+              "$ref": "subject.schema.json"
+            }
+          },
+          "required": [
+            "resource_type",
+            "id",
+            "revision",
+            "authority",
+            "deleted",
+            "value"
+          ],
+          "additionalProperties": false,
+          "$comment": "Terminal resources remain full records; physical erasure and collected tombstones are outside this slice. Envelope identity/revision must equal value identity/revision. Group/edge authority matches the nested resource; subject authority identifies its creator, not ownership of every attribute."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "resource_type": {
+              "const": "group"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "deleted": {
+              "const": false
+            },
+            "value": {
+              "$ref": "group-resource.schema.json#/$defs/group"
+            }
+          },
+          "required": [
+            "resource_type",
+            "id",
+            "revision",
+            "authority",
+            "deleted",
+            "value"
+          ],
+          "additionalProperties": false,
+          "$comment": "Terminal resources remain full records; physical erasure and collected tombstones are outside this slice. Envelope identity/revision must equal value identity/revision. Group/edge authority matches the nested resource; subject authority identifies its creator, not ownership of every attribute."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "resource_type": {
+              "const": "edge"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "deleted": {
+              "const": false
+            },
+            "value": {
+              "$ref": "group-resource.schema.json#/$defs/edge"
+            }
+          },
+          "required": [
+            "resource_type",
+            "id",
+            "revision",
+            "authority",
+            "deleted",
+            "value"
+          ],
+          "additionalProperties": false,
+          "$comment": "Terminal resources remain full records; physical erasure and collected tombstones are outside this slice. Envelope identity/revision must equal value identity/revision. Group/edge authority matches the nested resource; subject authority identifies its creator, not ownership of every attribute."
+        }
+      ]
+    },
+    "snapshot_request": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "const": "group-graph"
+        },
+        "schema_version": {
+          "const": "0.1"
+        },
+        "page_size": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "view",
+        "schema_version",
+        "page_size"
+      ],
+      "additionalProperties": false
+    },
+    "snapshot_page": {
+      "type": "object",
+      "properties": {
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "frontier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "state_validator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/record"
+          }
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "next_cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "change_cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "snapshot_expires_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "cursor_expires_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "validator_expires_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "scope",
+        "frontier",
+        "state_validator",
+        "records",
+        "complete",
+        "snapshot_expires_at",
+        "cursor_expires_at",
+        "validator_expires_at"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "complete": {
+              "const": false
+            },
+            "records": {
+              "minItems": 1
+            }
+          },
+          "required": [
+            "next_cursor"
+          ],
+          "not": {
+            "required": [
+              "change_cursor"
+            ]
+          }
+        },
+        {
+          "properties": {
+            "complete": {
+              "const": true
+            }
+          },
+          "required": [
+            "change_cursor"
+          ],
+          "not": {
+            "required": [
+              "next_cursor"
+            ]
+          }
+        }
+      ]
+    },
+    "change": {
+      "type": "object",
+      "properties": {
+        "transaction_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "part_index": {
+          "const": 0
+        },
+        "part_count": {
+          "const": 1
+        },
+        "dependencies": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "causal_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/record"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "transaction_id",
+        "operation_id",
+        "part_index",
+        "part_count",
+        "dependencies",
+        "causal_token",
+        "records"
+      ],
+      "additionalProperties": false
+    },
+    "change_page": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/change"
+          }
+        },
+        "next_cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "more": {
+          "type": "boolean"
+        },
+        "min_poll_after_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "idle_poll_after_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cursor_expires_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        }
+      },
+      "required": [
+        "scope",
+        "changes",
+        "next_cursor",
+        "more",
+        "min_poll_after_seconds",
+        "idle_poll_after_seconds",
+        "cursor_expires_at"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "more": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "changes": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

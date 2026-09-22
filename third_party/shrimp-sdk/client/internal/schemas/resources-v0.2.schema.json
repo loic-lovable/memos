@@ -1,0 +1,1424 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.2/resources-v0.2.schema.json",
+  "title": "SHRIMP 0.2 complete direct resource records",
+  "$comment": "Draft 0.2. Resolve catalog references locally. Structural validation is separate from authority, clock, equality and lifecycle validation.",
+  "$ref": "resources-v0.2.schema.json#/$defs/record",
+  "$defs": {
+    "human": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "subject"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "profile": {
+              "const": "human"
+            },
+            "lifecycle": {
+              "enum": [
+                "active",
+                "disabled",
+                "retired"
+              ]
+            },
+            "attributes": {},
+            "expires_at": {
+              "const": null
+            },
+            "attribute_profile": {
+              "const": "human-attributes-v1"
+            }
+          },
+          "required": [
+            "profile",
+            "lifecycle",
+            "attributes",
+            "expires_at"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "required": [
+                  "attribute_profile"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "attributes": {
+                    "$ref": "human-attributes-v1.schema.json#/$defs/facts"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "attributes": {
+                    "$ref": "common-v0.2.schema.json#/$defs/facts"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "workload": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "subject"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "profile": {
+              "const": "workload"
+            },
+            "lifecycle": {
+              "enum": [
+                "active",
+                "disabled",
+                "retired"
+              ]
+            },
+            "attributes": {
+              "$ref": "common-v0.2.schema.json#/$defs/facts"
+            },
+            "expires_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "identity_binding": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "binding"
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "profile",
+            "lifecycle",
+            "attributes",
+            "expires_at",
+            "identity_binding"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "device": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "subject"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "profile": {
+              "const": "device"
+            },
+            "lifecycle": {
+              "enum": [
+                "active",
+                "disabled",
+                "retired"
+              ]
+            },
+            "attributes": {
+              "$ref": "common-v0.2.schema.json#/$defs/facts"
+            },
+            "expires_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "identity_binding": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "binding"
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "profile",
+            "lifecycle",
+            "attributes",
+            "expires_at",
+            "identity_binding"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "agent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "subject"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "profile": {
+              "const": "agent"
+            },
+            "lifecycle": {
+              "enum": [
+                "active",
+                "disabled",
+                "retired"
+              ]
+            },
+            "attributes": {
+              "$ref": "common-v0.2.schema.json#/$defs/facts"
+            },
+            "expires_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "profile",
+            "lifecycle",
+            "attributes",
+            "expires_at"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "subject": {
+      "oneOf": [
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/human"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/workload"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/device"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/agent"
+        }
+      ]
+    },
+    "instance": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "instance"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "subject": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "subject"
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "kind": {
+              "enum": [
+                "workload-instance",
+                "agent-run"
+              ]
+            },
+            "state": {
+              "enum": [
+                "running",
+                "terminated"
+              ]
+            },
+            "expires_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "binding": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "binding"
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "subject",
+            "kind",
+            "state",
+            "expires_at",
+            "binding"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "controller": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "controller"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "subject": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "subject"
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "principal": {
+              "$ref": "common-v0.2.schema.json#/$defs/principal"
+            },
+            "relationship": {
+              "enum": [
+                "owner",
+                "sponsor",
+                "controller"
+              ]
+            },
+            "state": {
+              "enum": [
+                "present",
+                "removed"
+              ]
+            }
+          },
+          "required": [
+            "subject",
+            "principal",
+            "relationship",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "binding": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "binding"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "subject": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "subject"
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "instance": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "instance"
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mechanism": {
+              "$ref": "bindings-v0.2.schema.json#/$defs/mechanism"
+            },
+            "trust_context": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "identity_key": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "state": {
+              "enum": [
+                "active",
+                "revoked"
+              ]
+            }
+          },
+          "required": [
+            "subject",
+            "instance",
+            "mechanism",
+            "trust_context",
+            "identity_key",
+            "state"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "$ref": "bindings-v0.2.schema.json#/$defs/key_contract"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "source_reference": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "source_reference"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "subject": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "subject"
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "external_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "state": {
+              "enum": [
+                "associated",
+                "removed"
+              ]
+            }
+          },
+          "required": [
+            "subject",
+            "external_id",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "group": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "group"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "display_name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "state": {
+              "enum": [
+                "active",
+                "deleted"
+              ]
+            }
+          },
+          "required": [
+            "display_name",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "containment": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "containment"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "parent": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "group"
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "child": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "subject",
+                    "group"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "state": {
+              "enum": [
+                "present",
+                "removed"
+              ]
+            }
+          },
+          "required": [
+            "parent",
+            "child",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "role": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "role"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "display_name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 4096
+            },
+            "state": {
+              "enum": [
+                "active",
+                "retired"
+              ]
+            },
+            "principal_types": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "subject",
+                  "group"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 2,
+              "uniqueItems": true
+            },
+            "scope_kinds": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "tenant",
+                  "resource"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 2,
+              "uniqueItems": true
+            },
+            "resource_types": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "minItems": 0,
+              "maxItems": 64,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "display_name",
+            "description",
+            "state",
+            "principal_types",
+            "scope_kinds",
+            "resource_types"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "role_revision": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "role_revision"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "role"
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "definition_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "state": {
+              "enum": [
+                "active",
+                "retired"
+              ]
+            }
+          },
+          "required": [
+            "role",
+            "definition_id",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "assignment": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "assignment"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "principal": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "subject",
+                    "group"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "role_revision": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "role_revision"
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "resource_scope": {
+              "$ref": "common-v0.2.schema.json#/$defs/resource_scope"
+            },
+            "state": {
+              "enum": [
+                "present",
+                "removed"
+              ]
+            },
+            "valid_from": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "valid_until": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "principal",
+            "role_revision",
+            "resource_scope",
+            "state",
+            "valid_from",
+            "valid_until"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "dependency_record": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "dependency_record"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "holder": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "dependent_state": {
+              "$ref": "common-v0.2.schema.json#/$defs/dependent_state"
+            },
+            "issuer": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            },
+            "tenant": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "domain": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "history_epoch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "closure": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "state": {
+              "enum": [
+                "retained",
+                "released"
+              ]
+            }
+          },
+          "required": [
+            "holder",
+            "dependent_state",
+            "issuer",
+            "tenant",
+            "domain",
+            "history_epoch",
+            "closure",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "tombstone": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "subject",
+            "instance",
+            "controller",
+            "binding",
+            "source_reference",
+            "group",
+            "containment",
+            "role",
+            "role_revision",
+            "assignment",
+            "dependency_record",
+            "email_verification"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": true
+        },
+        "value": {
+          "const": null
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "record": {
+      "oneOf": [
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/subject"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/instance"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/controller"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/binding"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/source_reference"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/group"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/containment"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/role"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/role_revision"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/assignment"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/dependency_record"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/email_verification"
+        },
+        {
+          "$ref": "resources-v0.2.schema.json#/$defs/tombstone"
+        }
+      ]
+    },
+    "email_verification": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "email_verification"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "deleted": {
+          "const": false
+        },
+        "value": {
+          "$ref": "human-attributes-v1.schema.json#/$defs/verification_value"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "authority",
+        "deleted",
+        "value"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

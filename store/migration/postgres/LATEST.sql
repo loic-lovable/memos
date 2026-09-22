@@ -162,7 +162,8 @@ CREATE TABLE IF NOT EXISTS shrimp_subject (
   source_key VARCHAR(64) NOT NULL UNIQUE,
   revision VARCHAR(128) NOT NULL,
   lifecycle VARCHAR(16) NOT NULL,
-  display_name TEXT NOT NULL
+  display_name TEXT NOT NULL,
+  attributes TEXT NOT NULL DEFAULT 'null'
 );
 CREATE TABLE IF NOT EXISTS shrimp_window (
   id VARCHAR(128) PRIMARY KEY,

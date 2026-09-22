@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.2/problem-v0.2.schema.json",
+  "title": "SHRIMP 0.2 problem details and known outcome boundaries",
+  "$comment": "Draft 0.2. Resolve catalog references locally. Structural validation is separate from authority, clock, equality and lifecycle validation.",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "pattern": "^(https://[^\\s]+|about:blank)$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 400,
+      "maximum": 599
+    },
+    "code": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "stage": {
+      "enum": [
+        "authentication",
+        "authorization",
+        "negotiation",
+        "acceptance",
+        "commit",
+        "effect",
+        "recovery",
+        "read",
+        "synchronization",
+        "audit"
+      ]
+    },
+    "operation": {
+      "anyOf": [
+        {
+          "$ref": "common-v0.2.schema.json#/$defs/operation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "command_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "commit": {
+      "enum": [
+        "unknown",
+        "not_committed",
+        "committed"
+      ]
+    },
+    "recovery": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "retry_after_seconds": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "retry_after_seconds"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "type",
+    "title",
+    "status",
+    "code",
+    "stage",
+    "operation",
+    "command_id",
+    "commit",
+    "recovery"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "enum": [
+              "authentication",
+              "authorization"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "operation": {
+            "const": null
+          },
+          "command_id": {
+            "const": null
+          },
+          "commit": {
+            "const": "unknown"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "operation_result_unavailable"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 410
+          },
+          "stage": {
+            "const": "recovery"
+          },
+          "commit": {
+            "const": "unknown"
+          }
+        }
+      }
+    }
+  ]
+}

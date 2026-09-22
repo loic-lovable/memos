@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 var errShrimpConflict = errors.New("mutation_rejected")
 var errShrimpDependency = errors.New("invalid_dependency")
 
-const shrimpColumns = "id, user_id, source_id, source_revision, source_reference, revision, lifecycle, display_name"
+const shrimpColumns = "id, user_id, source_id, source_revision, source_reference, revision, lifecycle, display_name, attributes"
 
 // ShrimpEnrolled reports whether this database requires SHRIMP enforcement.
 func (d *DB) ShrimpEnrolled(ctx context.Context) (bool, error) {
@@ -30,8 +31,12 @@ func (d *DB) ShrimpEnrolled(ctx context.Context) (bool, error) {
 
 func readShrimpSubject(ctx context.Context, q rowQuerier, id string) (*store.ShrimpSubject, error) {
 	s := &store.ShrimpSubject{}
+	var attributes string
 	err := q.QueryRowContext(ctx, "SELECT "+shrimpColumns+" FROM shrimp_subject WHERE id=? OR source_id=?", id, id).
-		Scan(&s.ID, &s.UserID, &s.SourceID, &s.SourceRevision, &s.SourceReference, &s.Revision, &s.Lifecycle, &s.DisplayName)
+		Scan(&s.ID, &s.UserID, &s.SourceID, &s.SourceRevision, &s.SourceReference, &s.Revision, &s.Lifecycle, &s.DisplayName, &attributes)
+	if err == nil {
+		err = json.Unmarshal([]byte(attributes), &s.Attributes)
+	}
 	return s, err
 }
 
@@ -242,9 +247,16 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 		id, source, revision := random.UUID(), random.UUID(), random.UUID()
 		hash := sha256.Sum256([]byte(m.SourceReference))
 		s := &store.ShrimpSubject{ID: id, SourceID: source, SourceRevision: revision, SourceReference: m.SourceReference, Revision: revision, Lifecycle: "disabled", DisplayName: m.DisplayName}
+		if err := applyShrimpAttributes(s, m, revision); err != nil {
+			return nil, err
+		}
+		attributes, err := json.Marshal(s.Attributes)
+		if err != nil {
+			return nil, err
+		}
 		// The random username is an explicit mapping for this fresh installation.
 		// No existing account is discovered or adopted from a matching attribute.
-		if err := tx.QueryRowContext(ctx, "INSERT INTO user(username,role,nickname,password_hash,row_status) VALUES(?,'USER',?,'','ARCHIVED') RETURNING id", "p"+strings.ReplaceAll(id, "-", ""), m.DisplayName).Scan(&s.UserID); err != nil {
+		if err := tx.QueryRowContext(ctx, "INSERT INTO user(username,role,nickname,password_hash,row_status) VALUES(?,'USER',?,'','ARCHIVED') RETURNING id", "p"+strings.ReplaceAll(id, "-", ""), s.DisplayName).Scan(&s.UserID); err != nil {
 			return nil, err
 		}
 		if m.SSOProvider != "" {
@@ -255,7 +267,7 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 				return nil, err
 			}
 		}
-		_, err := tx.ExecContext(ctx, "INSERT INTO shrimp_subject(id,user_id,source_id,source_revision,source_reference,source_key,revision,lifecycle,display_name) VALUES(?,?,?,?,?,?,?,?,?)", id, s.UserID, source, revision, m.SourceReference, hex.EncodeToString(hash[:]), revision, s.Lifecycle, m.DisplayName)
+		_, err = tx.ExecContext(ctx, "INSERT INTO shrimp_subject(id,user_id,source_id,source_revision,source_reference,source_key,revision,lifecycle,display_name,attributes) VALUES(?,?,?,?,?,?,?,?,?,?)", id, s.UserID, source, revision, m.SourceReference, hex.EncodeToString(hash[:]), revision, s.Lifecycle, s.DisplayName, string(attributes))
 		return s, err
 	}
 	s, err := readShrimpSubject(ctx, tx, m.SubjectID)
@@ -264,6 +276,10 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 	}
 	if s.ID != m.SubjectID || s.Revision != m.ExpectedRevision || s.Lifecycle == "retired" {
 		return nil, errShrimpConflict
+	}
+	revision := random.UUID()
+	if err := applyShrimpAttributes(s, m, revision); err != nil {
+		return nil, err
 	}
 	update := &store.UpdateUser{ID: s.UserID}
 	switch m.Action {
@@ -289,16 +305,23 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 		state := store.Archived
 		update.RowStatus = &state
 	case "update_subject":
-		s.DisplayName = m.DisplayName
-		update.Nickname = &s.DisplayName
+		if _, set := m.Set["displayName"]; set || m.Set == nil || slices.Contains(m.Clear, "displayName") {
+			update.Nickname = &s.DisplayName
+		}
 	default:
 		return nil, errShrimpConflict
 	}
-	if _, err := updateUserTx(ctx, tx, update); err != nil {
+	if update.RowStatus != nil || update.Nickname != nil {
+		if _, err := updateUserTx(ctx, tx, update); err != nil {
+			return nil, err
+		}
+	}
+	s.Revision = revision
+	attributes, err := json.Marshal(s.Attributes)
+	if err != nil {
 		return nil, err
 	}
-	s.Revision = random.UUID()
-	_, err = tx.ExecContext(ctx, "UPDATE shrimp_subject SET revision=?,lifecycle=?,display_name=? WHERE id=?", s.Revision, s.Lifecycle, s.DisplayName, s.ID)
+	_, err = tx.ExecContext(ctx, "UPDATE shrimp_subject SET revision=?,lifecycle=?,display_name=?,attributes=? WHERE id=?", s.Revision, s.Lifecycle, s.DisplayName, string(attributes), s.ID)
 	return s, err
 }
 

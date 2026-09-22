@@ -1,0 +1,2122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.2/discovery-v0.2.schema.json",
+  "title": "SHRIMP capability discovery 0.2",
+  "$comment": "Draft 0.2. Resolve catalog references locally. Structural validation is separate from authority, clock, equality and lifecycle validation.",
+  "type": "object",
+  "properties": {
+    "discovery_version": {
+      "const": "0.2"
+    },
+    "resource": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "tenant": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "domain": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "tenant",
+        "domain"
+      ],
+      "additionalProperties": false
+    },
+    "discovery_revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "versions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "const": "0.2"
+          },
+          "schema_version": {
+            "const": "0.2"
+          },
+          "authentication_profile": {
+            "enum": [
+              "oauth-client-credentials-dpop-0.1",
+              "oauth-client-credentials-mtls-0.1"
+            ]
+          },
+          "subject_profiles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "enum": [
+                    "human",
+                    "workload",
+                    "device",
+                    "agent"
+                  ]
+                },
+                "schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                },
+                "required_relationship": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "owner",
+                        "sponsor",
+                        "controller"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "max_live_instances": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max_controllers": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "binding_mechanisms": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "minItems": 0,
+                  "maxItems": 64,
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "id",
+                "schema",
+                "required_relationship",
+                "max_live_instances",
+                "max_controllers",
+                "binding_mechanisms"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 4
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "minItems": 0,
+            "maxItems": 64,
+            "uniqueItems": true
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "minItems": 1,
+            "maxItems": 64,
+            "uniqueItems": true
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "path": {
+                  "type": "string",
+                  "pattern": "^/schemas/[A-Za-z0-9][A-Za-z0-9._-]*\\.json$",
+                  "not": {
+                    "pattern": "\\.\\."
+                  }
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "id",
+                "path",
+                "sha256"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 64
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "max_request_bytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_response_bytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_json_depth": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32
+              },
+              "max_commands": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64
+              },
+              "max_required_dependencies": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64
+              },
+              "max_open_windows_per_principal": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_pending_operations_per_principal": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_dependency_records_per_principal": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "min_causal_token_lifetime_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "min_validator_lifetime_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_page_records": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "max_open_snapshots_per_principal": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "min_snapshot_lifetime_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "min_change_history_retention_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "min_cursor_lifetime_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_inventory_records_scanned": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_healthy_observation_lag_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_audit_page_records": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "max_effect_deadline_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_wait_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 30000
+              },
+              "max_replay_window_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              },
+              "max_execute_ahead_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 300
+              },
+              "min_result_retention_seconds": {
+                "type": "integer",
+                "minimum": 86400
+              },
+              "max_pending_recovery_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30
+              },
+              "min_poll_after_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30
+              },
+              "max_poll_after_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30
+              },
+              "min_audit_retention_seconds": {
+                "type": "integer",
+                "minimum": 604800
+              },
+              "max_audit_publication_delay_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30
+              },
+              "max_audit_recovery_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30
+              },
+              "max_enumeration_page_records": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "max_open_enumerations_per_principal": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "min_enumeration_cursor_lifetime_seconds": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "max_request_bytes",
+              "max_response_bytes",
+              "max_json_depth",
+              "max_commands",
+              "max_required_dependencies",
+              "max_open_windows_per_principal",
+              "max_pending_operations_per_principal",
+              "min_causal_token_lifetime_seconds",
+              "min_validator_lifetime_seconds",
+              "max_healthy_observation_lag_seconds",
+              "max_effect_deadline_seconds",
+              "max_wait_ms",
+              "max_replay_window_seconds",
+              "max_execute_ahead_seconds",
+              "min_result_retention_seconds",
+              "max_pending_recovery_seconds",
+              "min_poll_after_seconds",
+              "max_poll_after_seconds",
+              "min_audit_retention_seconds",
+              "max_audit_publication_delay_seconds",
+              "max_audit_recovery_seconds"
+            ],
+            "additionalProperties": false
+          },
+          "quota_scope": {
+            "const": "principal-within-resource"
+          },
+          "groups": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "max_depth": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 64
+                  },
+                  "max_direct_members": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "max_depth",
+                  "max_direct_members"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roles": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "principal_types": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "subject",
+                        "group"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "uniqueItems": true
+                  },
+                  "scope_kinds": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "tenant",
+                        "resource"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "uniqueItems": true
+                  },
+                  "resource_types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "minItems": 0,
+                    "maxItems": 64,
+                    "uniqueItems": true
+                  },
+                  "custom_role_authoring": {
+                    "const": false
+                  },
+                  "definitions": {
+                    "const": "immutable-pinned-revisions"
+                  }
+                },
+                "required": [
+                  "principal_types",
+                  "scope_kinds",
+                  "resource_types",
+                  "custom_role_authoring",
+                  "definitions"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dependency_issuers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "resource": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https://"
+                },
+                "domains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "minItems": 1,
+                  "maxItems": 64,
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "resource",
+                "domains"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 64
+          },
+          "binding_mechanisms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "bindings-v0.2.schema.json#/$defs/mechanism"
+                },
+                "profile_uri": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "key_schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                },
+                "comparison": {
+                  "const": "exact"
+                }
+              },
+              "required": [
+                "id",
+                "profile_uri",
+                "key_schema",
+                "comparison"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "id": {
+                        "const": "oidc-sub-v1"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "key_schema": {
+                        "const": "bindings-v0.2.schema.json#/$defs/oidc_sub_key"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "id": {
+                        "const": "x509-sha256-v1"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "key_schema": {
+                        "const": "bindings-v0.2.schema.json#/$defs/x509_sha256_key"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "minItems": 0,
+            "maxItems": 64
+          },
+          "healthy_conditions": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "audit_surface": {
+            "type": "object",
+            "properties": {
+              "families": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "subject",
+                    "group",
+                    "binding",
+                    "source",
+                    "authority",
+                    "capability",
+                    "role",
+                    "nonhuman",
+                    "dependency",
+                    "reconciliation",
+                    "email_verification"
+                  ]
+                },
+                "minItems": 1,
+                "maxItems": 11,
+                "uniqueItems": true
+              },
+              "unauthenticated_traffic": {
+                "type": "boolean"
+              },
+              "ordinary_reads": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "families",
+              "unauthenticated_traffic",
+              "ordinary_reads"
+            ],
+            "additionalProperties": false
+          },
+          "profiles": {
+            "$ref": "#/$defs/profiles"
+          },
+          "enumeration": {
+            "type": "object",
+            "properties": {
+              "resource_types": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "subject",
+                    "instance",
+                    "controller",
+                    "binding",
+                    "source_reference",
+                    "group",
+                    "containment",
+                    "role",
+                    "role_revision",
+                    "assignment",
+                    "dependency_record",
+                    "email_verification"
+                  ]
+                },
+                "minItems": 1,
+                "maxItems": 12,
+                "uniqueItems": true
+              },
+              "representation": {
+                "const": "full-direct-records"
+              },
+              "consistency": {
+                "const": "per-page-current"
+              },
+              "ordering": {
+                "const": "type-id-utf8-ascending"
+              }
+            },
+            "required": [
+              "resource_types",
+              "representation",
+              "consistency",
+              "ordering"
+            ],
+            "additionalProperties": false
+          },
+          "human_attributes": {
+            "type": "object",
+            "properties": {
+              "max_emails": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16
+              },
+              "tzdb_version": {
+                "type": "string",
+                "pattern": "^[0-9]{4}[a-z]+$",
+                "not": {
+                  "pattern": "[\\r\\n]"
+                },
+                "maxLength": 16
+              }
+            },
+            "required": [
+              "max_emails",
+              "tzdb_version"
+            ],
+            "additionalProperties": false
+          },
+          "email_verification": {
+            "type": "object",
+            "properties": {
+              "max_validity_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 86400
+              },
+              "max_assertions_per_email": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16
+              }
+            },
+            "required": [
+              "max_validity_seconds",
+              "max_assertions_per_email"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "schema_version",
+          "authentication_profile",
+          "subject_profiles",
+          "capabilities",
+          "operations",
+          "schemas",
+          "limits",
+          "quota_scope",
+          "groups",
+          "roles",
+          "dependency_issuers",
+          "binding_mechanisms",
+          "healthy_conditions",
+          "audit_surface",
+          "profiles"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "baseline"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "allOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "enum": [
+                          "human",
+                          "workload",
+                          "device",
+                          "agent"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "operations": {
+                      "allOf": [
+                        {
+                          "contains": {
+                            "const": "mutation.submit"
+                          }
+                        },
+                        {
+                          "contains": {
+                            "const": "operation.read"
+                          }
+                        },
+                        {
+                          "contains": {
+                            "const": "replay_window.read"
+                          }
+                        },
+                        {
+                          "contains": {
+                            "const": "resource.read"
+                          }
+                        },
+                        {
+                          "contains": {
+                            "const": "resource.enumerate"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "human"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "subject_profiles": {
+                  "contains": {
+                    "properties": {
+                      "id": {
+                        "const": "human"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "subject_profiles": {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "human"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 0,
+                "maxContains": 1
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "workload"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "subject_profiles": {
+                  "contains": {
+                    "properties": {
+                      "id": {
+                        "const": "workload"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "subject_profiles": {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "workload"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 0,
+                "maxContains": 1
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "device"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "subject_profiles": {
+                  "contains": {
+                    "properties": {
+                      "id": {
+                        "const": "device"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "subject_profiles": {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "device"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 0,
+                "maxContains": 1
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "agent"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "subject_profiles": {
+                  "contains": {
+                    "properties": {
+                      "id": {
+                        "const": "agent"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "subject_profiles": {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "agent"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 0,
+                "maxContains": 1
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "directory-sync"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "operations": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "snapshot.read"
+                      }
+                    },
+                    {
+                      "contains": {
+                        "const": "change.read"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "baseline"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                },
+                {
+                  "properties": {
+                    "operations": {
+                      "contains": {
+                        "const": "snapshot.read"
+                      }
+                    }
+                  },
+                  "required": [
+                    "operations"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "directory-sync"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "baseline"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                },
+                {
+                  "properties": {
+                    "operations": {
+                      "contains": {
+                        "const": "change.read"
+                      }
+                    }
+                  },
+                  "required": [
+                    "operations"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "directory-sync"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "state-checks"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "operations": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "state.check"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "baseline"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                },
+                {
+                  "properties": {
+                    "operations": {
+                      "contains": {
+                        "const": "state.check"
+                      }
+                    }
+                  },
+                  "required": [
+                    "operations"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "state-checks"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "audit-retrieval"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "operations": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "audit.read"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "baseline"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                },
+                {
+                  "properties": {
+                    "operations": {
+                      "contains": {
+                        "const": "audit.read"
+                      }
+                    }
+                  },
+                  "required": [
+                    "operations"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "audit-retrieval"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "groups"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "groups": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "roles"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "roles": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "roles"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                },
+                {
+                  "properties": {
+                    "roles": {
+                      "type": "object",
+                      "properties": {
+                        "principal_types": {
+                          "contains": {
+                            "const": "group"
+                          }
+                        }
+                      },
+                      "required": [
+                        "principal_types"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "groups"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "baseline"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                },
+                {
+                  "properties": {
+                    "authentication_profile": {
+                      "const": "oauth-client-credentials-mtls-0.1"
+                    }
+                  }
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "allOf": [
+                    {
+                      "contains": {
+                        "const": "mtls"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "directory-sync"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "limits": {
+                  "required": [
+                    "max_page_records",
+                    "max_open_snapshots_per_principal",
+                    "min_snapshot_lifetime_seconds",
+                    "min_change_history_retention_seconds",
+                    "min_cursor_lifetime_seconds"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "state-checks"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "limits": {
+                  "required": [
+                    "max_inventory_records_scanned"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "durable-dependencies"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "limits": {
+                  "required": [
+                    "max_dependency_records_per_principal"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "audit-retrieval"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "limits": {
+                  "required": [
+                    "max_audit_page_records"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "baseline"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                },
+                {
+                  "not": {
+                    "properties": {
+                      "profiles": {
+                        "contains": {
+                          "const": "atomic-change-set"
+                        }
+                      }
+                    },
+                    "required": [
+                      "profiles"
+                    ]
+                  }
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "limits": {
+                  "properties": {
+                    "max_commands": {
+                      "const": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "atomic-change-set"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "limits": {
+                  "properties": {
+                    "max_commands": {
+                      "minimum": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "groups"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                },
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "roles"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "operations": {
+                  "contains": {
+                    "const": "derived.read"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "baseline"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                },
+                {
+                  "properties": {
+                    "operations": {
+                      "contains": {
+                        "const": "derived.read"
+                      }
+                    }
+                  },
+                  "required": [
+                    "operations"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "enum": [
+                      "groups",
+                      "roles"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "operations": {
+                  "contains": {
+                    "const": "resource.enumerate"
+                  }
+                }
+              },
+              "required": [
+                "operations"
+              ]
+            },
+            "then": {
+              "required": [
+                "enumeration"
+              ],
+              "properties": {
+                "limits": {
+                  "required": [
+                    "max_enumeration_page_records",
+                    "max_open_enumerations_per_principal",
+                    "min_enumeration_cursor_lifetime_seconds"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "enumeration"
+              ]
+            },
+            "then": {
+              "properties": {
+                "operations": {
+                  "contains": {
+                    "const": "resource.enumerate"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "human-attributes-v1"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "required": [
+                "human_attributes"
+              ]
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "baseline"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                },
+                {
+                  "required": [
+                    "human_attributes"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "human-attributes-v1"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "email-verification-v1"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "required": [
+                "email_verification"
+              ]
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {
+                  "properties": {
+                    "profiles": {
+                      "contains": {
+                        "const": "baseline"
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                },
+                {
+                  "required": [
+                    "email_verification"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "email-verification-v1"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "profiles": {
+                  "contains": {
+                    "const": "email-verification-v1"
+                  }
+                }
+              },
+              "required": [
+                "profiles"
+              ]
+            },
+            "then": {
+              "properties": {
+                "enumeration": {
+                  "properties": {
+                    "resource_types": {
+                      "contains": {
+                        "const": "email_verification"
+                      }
+                    }
+                  }
+                },
+                "audit_surface": {
+                  "properties": {
+                    "families": {
+                      "contains": {
+                        "const": "email_verification"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 0,
+      "maxItems": 1
+    }
+  },
+  "required": [
+    "discovery_version",
+    "resource",
+    "scope",
+    "discovery_revision",
+    "versions"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "profiles": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "baseline",
+          "human",
+          "directory-sync",
+          "state-checks",
+          "atomic-change-set",
+          "groups",
+          "roles",
+          "workload",
+          "device",
+          "agent",
+          "durable-dependencies",
+          "causal-enforcement",
+          "audit-retrieval",
+          "revocation",
+          "lifecycle-extensions",
+          "mtls",
+          "human-attributes-v1",
+          "email-verification-v1"
+        ]
+      },
+      "maxItems": 18,
+      "uniqueItems": true,
+      "allOf": [
+        {
+          "if": {
+            "contains": {
+              "const": "human"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "directory-sync"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "state-checks"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "atomic-change-set"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "groups"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              },
+              {
+                "contains": {
+                  "const": "atomic-change-set"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "roles"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "workload"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "device"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "agent"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "durable-dependencies"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "causal-enforcement"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              },
+              {
+                "contains": {
+                  "const": "durable-dependencies"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "audit-retrieval"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "revocation"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "lifecycle-extensions"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "mtls"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "baseline"
+            }
+          },
+          "then": {
+            "contains": {
+              "enum": [
+                "human",
+                "workload",
+                "device",
+                "agent"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "human-attributes-v1"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              },
+              {
+                "contains": {
+                  "const": "human"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "contains": {
+              "const": "email-verification-v1"
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "baseline"
+                }
+              },
+              {
+                "contains": {
+                  "const": "human"
+                }
+              },
+              {
+                "contains": {
+                  "const": "human-attributes-v1"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

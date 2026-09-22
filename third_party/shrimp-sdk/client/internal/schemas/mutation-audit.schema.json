@@ -1,0 +1,449 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.1/mutation-audit.schema.json",
+  "title": "Human and group mutation audit, with complete involved-resource scope",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1"
+        },
+        "filter": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "operation": {
+                  "$ref": "subject-mutation.schema.json#/properties/operation"
+                }
+              },
+              "required": [
+                "operation"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "resource": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "subject",
+                        "group",
+                        "edge"
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "resource"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "plan": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+                    },
+                    "digest": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "digest"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "plan"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "all": {
+                  "const": true
+                }
+              },
+              "required": [
+                "all"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 128
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        }
+      },
+      "required": [
+        "schema_version",
+        "filter",
+        "cursor",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "type": "object",
+          "properties": {
+            "tenant": {
+              "const": "acme"
+            },
+            "domain": {
+              "const": "A"
+            },
+            "schema_version": {
+              "const": "0.1"
+            },
+            "client": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "tenant",
+            "domain",
+            "schema_version",
+            "client"
+          ],
+          "additionalProperties": false
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/event"
+          },
+          "maxItems": 32
+        },
+        "next_cursor": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "cursor_expires_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "more": {
+          "type": "boolean"
+        },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "boundary": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "retained_from": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+            },
+            "redaction": {
+              "enum": [
+                "none",
+                "resources-outside-current-grant-omitted"
+              ]
+            }
+          },
+          "required": [
+            "boundary",
+            "complete",
+            "retained_from",
+            "redaction"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "scope",
+        "events",
+        "next_cursor",
+        "cursor_expires_at",
+        "more",
+        "coverage"
+      ],
+      "additionalProperties": false
+    },
+    "event": {
+      "type": "object",
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "recorded_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "authority": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stage": {
+          "enum": [
+            "received",
+            "rejected",
+            "committed",
+            "replayed",
+            "failed"
+          ]
+        },
+        "operation": {
+          "oneOf": [
+            {
+              "$ref": "subject-mutation.schema.json#/properties/operation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation_known": {
+          "type": "boolean"
+        },
+        "resource": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "subject",
+                    "group",
+                    "edge"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reconciliation": {
+          "oneOf": [
+            {
+              "$ref": "subject-mutation.schema.json#/properties/reconciliation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipt": {
+          "anyOf": [
+            {
+              "$ref": "operation-receipt.schema.json"
+            },
+            {
+              "$ref": "group-receipt.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "occurred_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "required_dependencies": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "enum": [
+                  "subject",
+                  "group",
+                  "edge"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 512,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "event_id",
+        "attempt_id",
+        "recorded_at",
+        "actor",
+        "authority",
+        "stage",
+        "operation",
+        "operation_known",
+        "resource",
+        "reconciliation",
+        "receipt",
+        "error",
+        "occurred_at",
+        "required_dependencies"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "stage": {
+                "enum": [
+                  "committed",
+                  "failed",
+                  "replayed"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "operation_known": {
+                "const": true
+              },
+              "operation": {
+                "type": "object"
+              },
+              "receipt": {
+                "type": "object"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "operation_known": {
+                "const": false
+              },
+              "receipt": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "stage": {
+                "const": "committed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "receipt": {
+                "properties": {
+                  "state": {
+                    "const": "succeeded"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "stage": {
+                "const": "failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "receipt": {
+                "properties": {
+                  "state": {
+                    "const": "failed"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$ref": "#/$defs/request"
+}

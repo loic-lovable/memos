@@ -1,0 +1,574 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.2/audit-v0.2.schema.json",
+  "title": "SHRIMP 0.2 audit publication and explicit coverage",
+  "$comment": "Draft 0.2. Resolve catalog references locally. Structural validation is separate from authority, clock, equality and lifecycle validation.",
+  "$ref": "audit-v0.2.schema.json#/$defs/request",
+  "$defs": {
+    "event": {
+      "type": "object",
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "received",
+            "rejected",
+            "accepted",
+            "committed",
+            "replayed",
+            "effect_progress",
+            "effect_complete",
+            "effect_failed",
+            "failed",
+            "superseded",
+            "administrative"
+          ]
+        },
+        "family": {
+          "enum": [
+            "subject",
+            "group",
+            "binding",
+            "source",
+            "authority",
+            "capability",
+            "role",
+            "nonhuman",
+            "dependency",
+            "reconciliation",
+            "email_verification"
+          ]
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "recorded_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "authority": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "common-v0.2.schema.json#/$defs/resource_ref"
+          },
+          "minItems": 0,
+          "maxItems": 64
+        },
+        "operation": {
+          "anyOf": [
+            {
+              "$ref": "common-v0.2.schema.json#/$defs/operation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation_known": {
+          "type": "boolean"
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+          },
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "receipt": {
+          "anyOf": [
+            {
+              "$ref": "receipt-v0.2.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "common-v0.2.schema.json#/$defs/error"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reconciliation": {
+          "anyOf": [
+            {
+              "$ref": "common-v0.2.schema.json#/$defs/plan_reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effect_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "event_id",
+        "attempt_id",
+        "kind",
+        "family",
+        "occurred_at",
+        "recorded_at",
+        "published_at",
+        "actor",
+        "authority",
+        "resources",
+        "operation",
+        "operation_known",
+        "links",
+        "receipt",
+        "error",
+        "reconciliation",
+        "effect_id"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operation_known": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "operation": {
+                "$ref": "common-v0.2.schema.json#/$defs/operation"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "receipt": {
+                "const": null
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "committed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "operation_known": {
+                "const": true
+              },
+              "receipt": {
+                "allOf": [
+                  {
+                    "$ref": "receipt-v0.2.schema.json"
+                  },
+                  {
+                    "properties": {
+                      "commit": {
+                        "properties": {
+                          "state": {
+                            "const": "committed"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "replayed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "operation_known": {
+                "const": true
+              },
+              "receipt": {
+                "$ref": "receipt-v0.2.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "effect_progress",
+                  "effect_complete",
+                  "effect_failed"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "operation_known": {
+                "const": true
+              },
+              "effect_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+              },
+              "receipt": {
+                "$ref": "receipt-v0.2.schema.json"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "boundary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "history_epoch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "retained_from": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "pending_publication": {
+          "type": "boolean"
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "enum": [
+                  "retention",
+                  "redaction",
+                  "unresolved",
+                  "restricted_surface"
+                ]
+              },
+              "from": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "through": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "reason",
+              "from",
+              "through"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "maxItems": 32
+        },
+        "surface": {
+          "type": "object",
+          "properties": {
+            "families": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "subject",
+                  "group",
+                  "binding",
+                  "source",
+                  "authority",
+                  "capability",
+                  "role",
+                  "nonhuman",
+                  "dependency",
+                  "reconciliation",
+                  "email_verification"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 11,
+              "uniqueItems": true
+            },
+            "unauthenticated_traffic": {
+              "type": "boolean"
+            },
+            "ordinary_reads": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "families",
+            "unauthenticated_traffic",
+            "ordinary_reads"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "boundary",
+        "history_epoch",
+        "retained_from",
+        "complete",
+        "pending_publication",
+        "gaps",
+        "surface"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "pending_publication": {
+                "const": false
+              },
+              "gaps": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.2"
+        },
+        "filter": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "all": {
+                  "const": true
+                }
+              },
+              "required": [
+                "all"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "operation": {
+                  "$ref": "common-v0.2.schema.json#/$defs/operation"
+                }
+              },
+              "required": [
+                "operation"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "resource": {
+                  "$ref": "common-v0.2.schema.json#/$defs/resource_ref"
+                }
+              },
+              "required": [
+                "resource"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "plan": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+                    },
+                    "digest": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "digest"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "plan"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "required_profiles": {
+          "$ref": "common-v0.2.schema.json#/$defs/required_profiles"
+        }
+      },
+      "required": [
+        "schema_version",
+        "filter",
+        "cursor",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "$ref": "common-v0.2.schema.json#/$defs/scope"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "audit-v0.2.schema.json#/$defs/event"
+          },
+          "minItems": 0,
+          "maxItems": 1000
+        },
+        "next_cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "cursor_expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "more": {
+          "type": "boolean"
+        },
+        "coverage": {
+          "$ref": "audit-v0.2.schema.json#/$defs/coverage"
+        }
+      },
+      "required": [
+        "scope",
+        "events",
+        "next_cursor",
+        "cursor_expires_at",
+        "more",
+        "coverage"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

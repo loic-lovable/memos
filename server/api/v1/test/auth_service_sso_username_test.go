@@ -31,7 +31,7 @@ func TestProvisionedSSOAttemptStaysFencedAfterDisableAndRestore(t *testing.T) {
 	mutate := func(action string, subject *store.ShrimpSubject) *store.ShrimpSubject {
 		window, closes, err := driver.ShrimpWindow(ctx, "hr")
 		require.NoError(t, err)
-		intent := store.ShrimpMutation{Principal: "hr", Window: window, ID: uuid.NewV4().String(), Fingerprint: uuid.NewV4().String(),
+		intent := store.ShrimpMutation{Authority: "hr-authority", Principal: "hr", Window: window, ID: uuid.NewV4().String(), Fingerprint: uuid.NewV4().String(),
 			Action: action, Deadline: closes - 1, CommandID: "c1", SourceReference: "provisioned-alice", DisplayName: "Alice", SSOProvider: "pilot-sso"}
 		if subject != nil {
 			intent.SubjectID, intent.ExpectedRevision = subject.ID, subject.Revision

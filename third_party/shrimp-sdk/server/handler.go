@@ -27,14 +27,16 @@ var discoveryTemplate []byte
 // Config describes trusted application enrollment; requests cannot choose it.
 // Scope and enforcement declarations must match the application's durable state.
 type Config struct {
-	Resource                                        string `json:"resource"`
-	Issuer                                          string `json:"issuer"`
-	IssuerKeyID                                     string `json:"issuer_key_id"`
-	IssuerKeyFile                                   string `json:"issuer_key_file"`
-	ClientID                                        string `json:"client_id"`
-	Authority                                       string `json:"authority"`
-	SchemaDirectory                                 string `json:"schema_directory"`
-	AllowWrite                                      bool   `json:"allow_write"`
+	Resource        string `json:"resource"`
+	Issuer          string `json:"issuer"`
+	IssuerKeyID     string `json:"issuer_key_id"`
+	IssuerKeyFile   string `json:"issuer_key_file"`
+	ClientID        string `json:"client_id"`
+	Authority       string `json:"authority"`
+	SchemaDirectory string `json:"schema_directory"`
+	// ScalarAttributes requires Apply to enforce and persist Set/Clear and owned facts.
+	ScalarAttributes                                bool `json:"scalar_attributes"`
+	AllowWrite                                      bool `json:"allow_write"`
 	Tenant, Domain, HistoryEpoch, DiscoveryRevision string
 	AdmissionConsumer, HealthyConditions            string
 }
@@ -76,6 +78,7 @@ func New(ctx context.Context, app Application, config Config) (*Handler, error) 
 	if err != nil {
 		return nil, err
 	}
+	paths = append(paths, filepath.Join(config.SchemaDirectory, "human-attributes-v1.schema.json"))
 	catalog := map[string]*jsonschema.Schema{}
 	entries := []any{}
 	for _, path := range paths {
@@ -333,8 +336,13 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 	}
 	canonical, _ := json.Marshal(body)
 	hash := sha256.Sum256(canonical)
-	m := Mutation{Principal: claims.Subject, Window: op["replay_window"].(string), ID: op["id"].(string), Fingerprint: hex.EncodeToString(hash[:]), Action: command["action"].(string), Deadline: deadline.Unix(), CommandID: command["command_id"].(string), RecoverOnly: !h.config.AllowWrite || !hasScope(claims, "shrimp.write")}
+	m := Mutation{Authority: h.config.Authority, Principal: claims.Subject, Window: op["replay_window"].(string), ID: op["id"].(string), Fingerprint: hex.EncodeToString(hash[:]), Action: command["action"].(string), Deadline: deadline.Unix(), CommandID: command["command_id"].(string), RecoverOnly: !h.config.AllowWrite || !hasScope(claims, "shrimp.write")}
 	if profiles, ok := body["required_profiles"].([]any); ok && len(profiles) > 0 {
+		m.UnsupportedProfiles = true
+	}
+	if _, selected := command["attribute_profile"]; selected {
+		// Keep implied support rejection at the application's commit boundary,
+		// after retained intent equality and authorized outcome recovery.
 		m.UnsupportedProfiles = true
 	}
 	for _, token := range body["required_dependencies"].([]any) {
@@ -345,12 +353,21 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		attributes := command["attributes"].(map[string]any)
 		source, ok := command["source_reference"].(string)
 		name, nameOK := attributes["displayName"].(string)
-		if command["profile"] != "human" || !ok || source == "" || !nameOK || len(attributes) != 1 {
+		legacyOnly := !h.config.ScalarAttributes && (!nameOK || len(attributes) != 1)
+		if command["profile"] != "human" || !ok || source == "" || legacyOnly {
 			h.problem(w, 400, "unsupported_create_shape", "acceptance")
 			return
 		}
 		m.SourceReference = source
 		m.DisplayName = name
+		if h.config.ScalarAttributes {
+			var valid bool
+			m.Set, m.Clear, valid = scalarChanges(attributes, nil)
+			if !valid {
+				h.problem(w, 400, "unsupported_attribute_update", "acceptance")
+				return
+			}
+		}
 	case "activate", "disable", "retire", "update_subject":
 		resource := command["resource"].(map[string]any)
 		m.SubjectID = resource["id"].(string)
@@ -358,11 +375,19 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		if m.Action == "update_subject" {
 			set := command["set"].(map[string]any)
 			name, ok := set["displayName"].(string)
-			if !ok || len(set) != 1 || len(command["clear"].([]any)) != 0 {
+			if !h.config.ScalarAttributes && (!ok || len(set) != 1 || len(command["clear"].([]any)) != 0) {
 				h.problem(w, 400, "unsupported_attribute_update", "acceptance")
 				return
 			}
 			m.DisplayName = name
+			if h.config.ScalarAttributes {
+				var valid bool
+				m.Set, m.Clear, valid = scalarChanges(set, command["clear"].([]any))
+				if !valid {
+					h.problem(w, 400, "unsupported_attribute_update", "acceptance")
+					return
+				}
+			}
 		}
 	default:
 		h.problem(w, 400, "unsupported_command", "acceptance")

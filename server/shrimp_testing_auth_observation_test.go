@@ -38,7 +38,7 @@ func TestPrivateAuthenticationObservation(t *testing.T) {
 	require.NoError(t, s.EnableShrimpPilot(ctx, "https://pilot.example/shrimp/v1/tenants/acme/domains/A"))
 	window, deadline, err := d.(store.ShrimpDriver).ShrimpWindow(ctx, "hr")
 	require.NoError(t, err)
-	created, err := s.ApplyShrimp(ctx, store.ShrimpMutation{Principal: "hr", Window: window, ID: "create", Fingerprint: "create", Action: "create_subject", SourceReference: "auth-fixture", DisplayName: "Pilot", Deadline: deadline - 1, CommandID: "c1"})
+	created, err := s.ApplyShrimp(ctx, store.ShrimpMutation{Authority: "hr-authority", Principal: "hr", Window: window, ID: "create", Fingerprint: "create", Action: "create_subject", SourceReference: "auth-fixture", DisplayName: "Pilot", Deadline: deadline - 1, CommandID: "c1"})
 	require.NoError(t, err)
 	user, err := s.GetUser(ctx, &store.FindUser{ID: &created.Subject.UserID})
 	require.NoError(t, err)

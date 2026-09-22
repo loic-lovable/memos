@@ -31,7 +31,7 @@ func pilotIntent(t *testing.T, d *DB, action string, subject *store.ShrimpSubjec
 	t.Helper()
 	window, close, err := d.ShrimpWindow(t.Context(), "hr")
 	require.NoError(t, err)
-	m := store.ShrimpMutation{Principal: "hr", Window: window, ID: random.UUID(), Fingerprint: random.UUID(), Action: action, Deadline: close - 1, SourceReference: random.UUID(), DisplayName: "Pilot", CommandID: "c1"}
+	m := store.ShrimpMutation{Authority: "hr-authority", Principal: "hr", Window: window, ID: random.UUID(), Fingerprint: random.UUID(), Action: action, Deadline: close - 1, SourceReference: random.UUID(), DisplayName: "Pilot", CommandID: "c1"}
 	if subject != nil {
 		m.SubjectID = subject.ID
 		m.ExpectedRevision = subject.Revision

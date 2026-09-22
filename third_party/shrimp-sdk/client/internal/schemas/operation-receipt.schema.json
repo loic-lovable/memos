@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.1/operation-receipt.schema.json",
+  "title": "Candidate single-human-subject operation receipt",
+  "type": "object",
+  "properties": {
+    "operation": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "replay_window": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "href": {
+          "type": "string",
+          "pattern": "^/[^?#]+/operations/[A-Za-z0-9._~-]+/[A-Za-z0-9._~-]+$"
+        }
+      },
+      "required": [
+        "id",
+        "replay_window",
+        "href"
+      ],
+      "additionalProperties": false
+    },
+    "state": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "pending"
+      ]
+    },
+    "commit": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "committed",
+            "not_committed"
+          ]
+        },
+        "causal_token": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "subject"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "revision": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "revision"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "state",
+        "causal_token",
+        "resources"
+      ],
+      "additionalProperties": false
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "admission_block"
+          },
+          "resource": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "subject"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "state": {
+            "enum": [
+              "not_started",
+              "pending",
+              "complete",
+              "failed"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "resource",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 1
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "code"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "required": [
+    "operation",
+    "state",
+    "commit",
+    "effects",
+    "error"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "commit": {
+            "properties": {
+              "state": {
+                "const": "committed"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "state": {
+            "const": "succeeded"
+          },
+          "commit": {
+            "properties": {
+              "causal_token": {
+                "type": "string",
+                "minLength": 1
+              },
+              "resources": {
+                "minItems": 1
+              }
+            }
+          },
+          "effects": {
+            "items": {
+              "properties": {
+                "state": {
+                  "const": "complete"
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "state": {
+            "enum": [
+              "pending",
+              "failed"
+            ]
+          },
+          "commit": {
+            "properties": {
+              "causal_token": {
+                "type": "null"
+              },
+              "resources": {
+                "maxItems": 0
+              }
+            }
+          },
+          "effects": {
+            "items": {
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_started",
+                    "pending",
+                    "failed"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
+          },
+          "effects": {
+            "items": {
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_started",
+                    "failed"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "error": {
+            "type": "null"
+          },
+          "effects": {
+            "items": {
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_started",
+                    "pending",
+                    "complete"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "succeeded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "commit": {
+            "properties": {
+              "state": {
+                "const": "committed"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

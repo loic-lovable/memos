@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.1/subject.schema.json",
+  "$comment": "Candidate schemas; the .example identifier is not a hosted retrieval URL. Resolve references from this directory. Semantic and Unicode/duplicate-member checks also apply.",
+  "title": "Candidate human subject representation",
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "subject"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "profile": {
+          "const": "human"
+        },
+        "lifecycle": {
+          "enum": [
+            "active",
+            "disabled",
+            "retired"
+          ]
+        },
+        "attributes": {
+          "type": "object",
+          "properties": {
+            "displayName": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 1024
+                },
+                "authority": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "revision": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value",
+                "authority",
+                "revision"
+              ],
+              "additionalProperties": false
+            },
+            "department": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 1024
+                },
+                "authority": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "revision": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value",
+                "authority",
+                "revision"
+              ],
+              "additionalProperties": false
+            },
+            "email": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 1024
+                },
+                "authority": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "revision": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "value",
+                "authority",
+                "revision"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "source_references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "authority": {
+                "type": "string",
+                "minLength": 1
+              },
+              "external_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "authority",
+              "external_id"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 16,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "profile",
+        "lifecycle",
+        "attributes",
+        "source_references"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "type",
+    "id",
+    "revision",
+    "value"
+  ],
+  "additionalProperties": false
+}

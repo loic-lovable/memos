@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.1/group-receipt.schema.json",
+  "title": "Candidate group commit with separate membership projection effect",
+  "$comment": "Candidate group wire slice; not advertised by the human HTTPS lab. Semantic checks also apply.",
+  "type": "object",
+  "properties": {
+    "operation": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "replay_window": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "href": {
+          "type": "string",
+          "pattern": "^/[^?#]+/operations/[A-Za-z0-9._~-]+/[A-Za-z0-9._~-]+$"
+        }
+      },
+      "required": [
+        "id",
+        "replay_window",
+        "href"
+      ],
+      "additionalProperties": false
+    },
+    "state": {
+      "enum": [
+        "succeeded",
+        "failed"
+      ]
+    },
+    "commit": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "committed",
+            "not_committed"
+          ]
+        },
+        "causal_token": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "enum": [
+                  "group",
+                  "edge"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "revision": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "revision"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "state",
+        "causal_token",
+        "resources"
+      ],
+      "additionalProperties": false
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "membership_projection"
+          },
+          "consumer": {
+            "const": "group-memberships"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "complete"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "consumer",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 1
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "code"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "required": [
+    "operation",
+    "state",
+    "commit",
+    "effects",
+    "error"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "succeeded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "commit": {
+            "properties": {
+              "state": {
+                "const": "committed"
+              },
+              "causal_token": {
+                "type": "string",
+                "minLength": 1
+              },
+              "resources": {
+                "minItems": 1
+              }
+            }
+          },
+          "effects": {
+            "minItems": 1
+          },
+          "error": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "commit": {
+            "properties": {
+              "state": {
+                "const": "not_committed"
+              },
+              "causal_token": {
+                "type": "null"
+              },
+              "resources": {
+                "maxItems": 0
+              }
+            }
+          },
+          "effects": {
+            "maxItems": 0
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  ]
+}

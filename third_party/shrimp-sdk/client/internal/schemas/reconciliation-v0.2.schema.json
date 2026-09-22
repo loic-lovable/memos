@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.2/reconciliation-v0.2.schema.json",
+  "title": "SHRIMP 0.2 portable concrete repair plan",
+  "$comment": "Draft 0.2. Resolve catalog references locally. Structural validation is separate from authority, clock, equality and lifecycle validation.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "0.2"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+    },
+    "resource": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "authority": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "frontier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "complete": {
+          "const": true
+        },
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "id",
+        "frontier",
+        "complete",
+        "schema",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "$ref": "common-v0.2.schema.json#/$defs/view"
+        },
+        "frontier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "validator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "complete": {
+          "const": true
+        }
+      },
+      "required": [
+        "view",
+        "frontier",
+        "validator",
+        "complete"
+      ],
+      "additionalProperties": false
+    },
+    "identity_mapping": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "common-v0.2.schema.json#/$defs/resource_ref"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "source_key",
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 10000
+    },
+    "differences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "missing",
+              "extra",
+              "conflicting",
+              "independent"
+            ]
+          },
+          "source_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "common-v0.2.schema.json#/$defs/resource_ref"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "source_key",
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 10000
+    },
+    "repairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+          },
+          "after": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+            },
+            "minItems": 0,
+            "maxItems": 1000,
+            "uniqueItems": true
+          },
+          "request": {
+            "allOf": [
+              {
+                "$ref": "mutation-v0.2.schema.json"
+              },
+              {
+                "properties": {
+                  "reconciliation": {
+                    "const": null
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "after",
+          "request"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 1000
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "creates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "updates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "activations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "disables": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retirements": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relationship_removals": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "binding_changes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "authority_transfers": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "creates",
+        "updates",
+        "activations",
+        "disables",
+        "retirements",
+        "relationship_removals",
+        "binding_changes",
+        "authority_transfers"
+      ],
+      "additionalProperties": false
+    },
+    "approval": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": [
+            "local-review",
+            "configured-policy"
+          ]
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "plan_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        }
+      },
+      "required": [
+        "mode",
+        "reference",
+        "plan_digest",
+        "expires_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "resource",
+    "authority",
+    "source",
+    "target",
+    "identity_mapping",
+    "differences",
+    "repairs",
+    "limits",
+    "approval"
+  ],
+  "additionalProperties": false
+}

@@ -33,10 +33,18 @@ var ErrShrimpProofStorage = errors.New("proof replay storage unavailable")
 // ErrShrimpWindowQuota means the principal already holds its maximum open windows.
 var ErrShrimpWindowQuota = errors.New("replay_window_quota")
 
+// ShrimpScalarFact preserves the exact owned scalar, including an explicit clear.
+type ShrimpScalarFact struct {
+	Value     *string `json:"value"`
+	Authority string  `json:"authority"`
+	Revision  string  `json:"revision"`
+}
+
 // ShrimpSubject is the persistent pilot identity, separate from a Memos username.
 type ShrimpSubject struct {
 	ID, SourceID, SourceRevision, SourceReference, Revision, Lifecycle, DisplayName string
 	UserID                                                                          int32
+	Attributes                                                                      map[string]ShrimpScalarFact
 }
 
 // ShrimpMutation is a validated, single-account provisioning intent.
@@ -44,6 +52,9 @@ type ShrimpMutation struct {
 	Principal, Window, ID, Fingerprint, Action, SubjectID, ExpectedRevision string
 	SourceReference, DisplayName                                            string
 	SSOProvider                                                             string
+	Authority                                                               string
+	Set                                                                     map[string]string
+	Clear                                                                   []string
 	Deadline                                                                int64
 	Dependencies                                                            []string
 	CommandID                                                               string

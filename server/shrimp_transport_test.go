@@ -35,7 +35,7 @@ func TestAdmissionTransportFlushesBeforeDisableCompletes(t *testing.T) {
 	mutation := func(action string, subject store.ShrimpSubject) store.ShrimpMutation {
 		window, deadline, err := driver.ShrimpWindow(ctx, "hr")
 		require.NoError(t, err)
-		return store.ShrimpMutation{Principal: "hr", Window: window, ID: random.UUID(), Fingerprint: random.UUID(), Action: action, SourceReference: random.UUID(), DisplayName: "Pilot", SubjectID: subject.ID, ExpectedRevision: subject.Revision, Deadline: deadline - 1, CommandID: "c1"}
+		return store.ShrimpMutation{Authority: "hr-authority", Principal: "hr", Window: window, ID: random.UUID(), Fingerprint: random.UUID(), Action: action, SourceReference: random.UUID(), DisplayName: "Pilot", SubjectID: subject.ID, ExpectedRevision: subject.Revision, Deadline: deadline - 1, CommandID: "c1"}
 	}
 	created, err := s.ApplyShrimp(ctx, mutation("create_subject", store.ShrimpSubject{}))
 	require.NoError(t, err)

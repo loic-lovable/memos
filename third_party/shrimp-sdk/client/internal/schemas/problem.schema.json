@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.1/problem.schema.json",
+  "title": "Candidate SHRIMP Problem Details",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "pattern": "^(https://[^\\s]+|about:blank)$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 400,
+      "maximum": 599
+    },
+    "code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "recovery": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "commit": {
+      "enum": [
+        "unknown"
+      ]
+    }
+  },
+  "required": [
+    "type",
+    "title",
+    "status",
+    "code"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "not": {
+              "enum": [
+                401,
+                403
+              ]
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "recovery"
+        ]
+      }
+    }
+  ]
+}

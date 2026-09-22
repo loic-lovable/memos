@@ -38,8 +38,15 @@ func adapterError(err error) error {
 }
 
 func subject(s store.ShrimpSubject) sdk.Subject {
+	var attributes map[string]sdk.ScalarFact
+	if s.Attributes != nil {
+		attributes = map[string]sdk.ScalarFact{}
+		for name, fact := range s.Attributes {
+			attributes[name] = sdk.ScalarFact{Value: fact.Value, Authority: fact.Authority, Revision: fact.Revision}
+		}
+	}
 	return sdk.Subject{ID: s.ID, SourceID: s.SourceID, SourceRevision: s.SourceRevision,
-		SourceReference: s.SourceReference, Revision: s.Revision, Lifecycle: s.Lifecycle, DisplayName: s.DisplayName}
+		SourceReference: s.SourceReference, Revision: s.Revision, Lifecycle: s.Lifecycle, DisplayName: s.DisplayName, Attributes: attributes}
 }
 
 func result(r *store.ShrimpResult) *sdk.Result {
@@ -63,7 +70,7 @@ func (a *application) Apply(ctx context.Context, m sdk.Mutation) (*sdk.Result, e
 	r, err := h.store.ApplyShrimp(ctx, store.ShrimpMutation{
 		Principal: m.Principal, Window: m.Window, ID: m.ID, Fingerprint: m.Fingerprint,
 		Action: m.Action, SubjectID: m.SubjectID, ExpectedRevision: m.ExpectedRevision,
-		SourceReference: m.SourceReference, DisplayName: m.DisplayName, SSOProvider: h.config.SSOProvider,
+		SourceReference: m.SourceReference, DisplayName: m.DisplayName, Authority: m.Authority, Set: m.Set, Clear: m.Clear, SSOProvider: h.config.SSOProvider,
 		Deadline: m.Deadline, Dependencies: m.Dependencies, CommandID: m.CommandID,
 		RecoverOnly: m.RecoverOnly, UnsupportedProfiles: m.UnsupportedProfiles,
 	})

@@ -129,3 +129,78 @@ type lookupApp struct {
 func (a *lookupApp) Result(context.Context, string, string, string) (*Result, error) {
 	return nil, a.failure
 }
+
+// This application fixture owns support checks after retained-intent lookup,
+// matching the public Apply contract. The handler must propagate implied use.
+type profileCheckingApp struct {
+	contractApp
+	fingerprint string
+	retained    *Result
+	commits     int
+}
+
+func (a *profileCheckingApp) Apply(ctx context.Context, mutation Mutation) (*Result, error) {
+	result, err := a.contractApp.Apply(ctx, mutation)
+	if err != nil {
+		return nil, err
+	}
+	if a.retained != nil {
+		if a.fingerprint != mutation.Fingerprint {
+			return nil, errors.New("replay_conflict")
+		}
+		return a.retained, nil
+	}
+	if mutation.UnsupportedProfiles {
+		return nil, errors.New("unsupported_profile")
+	}
+	a.fingerprint, a.retained = mutation.Fingerprint, result
+	a.commits++
+	return result, nil
+}
+
+func TestImpliedHumanAttributesPreserveApplicationRejectionAndRecovery(t *testing.T) {
+	const command = `{"command_id":"command","action":"create_subject","if_absent":true,"profile":"human","expires_at":null,"source_reference":"employee-1","attributes":{"displayName":"Maya"}}`
+	var body map[string]any
+	require.NoError(t, json.Unmarshal([]byte(contractMutation), &body))
+	var create map[string]any
+	require.NoError(t, json.Unmarshal([]byte(command), &create))
+	body["commands"] = []any{create}
+	app := &profileCheckingApp{contractApp: contractApp{t: t}}
+	h := &Handler{driver: app, path: "/shrimp", config: Config{Authority: "hr", AllowWrite: true}, resolved: map[string]*jsonschema.Resolved{"mutation": objectSchema(t), "receipt": objectSchema(t)}}
+	claims := &accessClaims{Scope: "shrimp.read shrimp.write"}
+	claims.Subject = "client"
+	submit := func() *httptest.ResponseRecorder {
+		t.Helper()
+		raw, err := json.Marshal(body)
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "/shrimp/mutations", strings.NewReader(string(raw)))
+		request.Header.Set("SHRIMP-Version", "0.2")
+		response := httptest.NewRecorder()
+		h.auditedMutation(response, request, claims)
+		return response
+	}
+	create["attribute_profile"] = "human-attributes-v1"
+	rejected := submit()
+	require.Equal(t, http.StatusBadRequest, rejected.Code)
+	require.Contains(t, rejected.Body.String(), `"code":"unsupported_profile"`)
+	require.True(t, app.mutation.UnsupportedProfiles)
+	require.Zero(t, app.commits)
+
+	delete(create, "attribute_profile")
+	accepted := submit()
+	require.Equal(t, http.StatusOK, accepted.Code)
+	require.False(t, app.mutation.UnsupportedProfiles)
+	require.Equal(t, 1, app.commits)
+
+	create["attribute_profile"] = "human-attributes-v1"
+	conflict := submit()
+	require.Equal(t, http.StatusConflict, conflict.Code)
+	require.Contains(t, conflict.Body.String(), `"code":"replay_conflict"`)
+	delete(create, "attribute_profile")
+	h.config.AllowWrite = false
+	recovered := submit()
+	require.Equal(t, http.StatusOK, recovered.Code)
+	require.Equal(t, accepted.Body.String(), recovered.Body.String())
+	require.True(t, app.mutation.RecoverOnly)
+	require.Equal(t, 1, app.commits)
+}

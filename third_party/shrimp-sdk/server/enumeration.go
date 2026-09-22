@@ -13,7 +13,23 @@ import (
 func (h *Handler) directRecord(record Record) map[string]any {
 	s := record.Subject
 	revision := s.Revision
-	var value any = map[string]any{"profile": "human", "lifecycle": s.Lifecycle, "expires_at": nil, "attributes": map[string]any{"displayName": map[string]any{"value": s.DisplayName, "authority": h.config.Authority, "revision": s.Revision}}}
+	attributes := make(map[string]any, len(s.Attributes))
+	for name, fact := range s.Attributes {
+		authority := fact.Authority
+		if authority == "" {
+			authority = h.config.Authority
+		}
+		var value any
+		if fact.Value != nil {
+			value = *fact.Value
+		}
+		attributes[name] = map[string]any{"value": value, "authority": authority, "revision": fact.Revision}
+	}
+	if s.Attributes == nil {
+		attributes["displayName"] = map[string]any{"value": s.DisplayName, "authority": h.config.Authority, "revision": s.Revision}
+	}
+
+	var value any = map[string]any{"profile": "human", "lifecycle": s.Lifecycle, "expires_at": nil, "attributes": attributes}
 	if record.Type == "source_reference" {
 		revision = s.SourceRevision
 		value = map[string]any{"subject": ref("subject", s.ID), "external_id": s.SourceReference, "state": "associated"}

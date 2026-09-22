@@ -1,0 +1,567 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.2/receipt-v0.2.schema.json",
+  "title": "SHRIMP 0.2 acceptance, commit and asynchronous effects",
+  "$comment": "Draft 0.2. Resolve catalog references locally. Structural validation is separate from authority, clock, equality and lifecycle validation.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "0.2"
+    },
+    "scope": {
+      "$ref": "common-v0.2.schema.json#/$defs/scope"
+    },
+    "operation": {
+      "$ref": "common-v0.2.schema.json#/$defs/operation"
+    },
+    "accepted_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "state": {
+      "enum": [
+        "pending",
+        "succeeded",
+        "failed",
+        "superseded"
+      ]
+    },
+    "terminal_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "commit": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "committed",
+            "not_committed",
+            "unknown"
+          ]
+        },
+        "causal_token": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+              },
+              "resource": {
+                "$ref": "common-v0.2.schema.json#/$defs/resource_ref"
+              },
+              "revision": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              }
+            },
+            "required": [
+              "command_id",
+              "resource",
+              "revision"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "maxItems": 128
+        }
+      },
+      "required": [
+        "state",
+        "causal_token",
+        "resources"
+      ],
+      "additionalProperties": false
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+          },
+          "kind": {
+            "enum": [
+              "admission_block",
+              "binding_fence",
+              "membership_projection",
+              "assignment_projection",
+              "profile",
+              "erasure"
+            ]
+          },
+          "resource": {
+            "$ref": "common-v0.2.schema.json#/$defs/resource_ref"
+          },
+          "consumer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "state": {
+            "enum": [
+              "not_started",
+              "pending",
+              "complete",
+              "failed"
+            ]
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "observed_frontier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "common-v0.2.schema.json#/$defs/error"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "policy_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "resource",
+          "consumer",
+          "state",
+          "deadline",
+          "observed_frontier",
+          "error"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "complete"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "observed_frontier": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                },
+                "error": {
+                  "const": null
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "failed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "error": {
+                  "$ref": "common-v0.2.schema.json#/$defs/error"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_started",
+                    "pending"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "observed_frontier": {
+                  "const": null
+                },
+                "error": {
+                  "const": null
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "erasure"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "policy_id"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "policy_id"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 0,
+      "maxItems": 256
+    },
+    "error": {
+      "anyOf": [
+        {
+          "$ref": "common-v0.2.schema.json#/$defs/error"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "superseded_by": {
+      "anyOf": [
+        {
+          "$ref": "common-v0.2.schema.json#/$defs/operation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "results_retained_until": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "min_result_retention_seconds": {
+      "type": "integer",
+      "minimum": 86400
+    },
+    "poll_after_seconds": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "scope",
+    "operation",
+    "accepted_at",
+    "state",
+    "terminal_at",
+    "commit",
+    "effects",
+    "error",
+    "superseded_by",
+    "results_retained_until",
+    "min_result_retention_seconds",
+    "poll_after_seconds"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "commit": {
+            "properties": {
+              "state": {
+                "const": "committed"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "commit": {
+            "properties": {
+              "causal_token": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "resources": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "commit": {
+            "properties": {
+              "causal_token": {
+                "const": null
+              },
+              "resources": {
+                "maxItems": 0
+              }
+            }
+          },
+          "effects": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "succeeded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "commit": {
+            "properties": {
+              "state": {
+                "const": "committed"
+              }
+            }
+          },
+          "effects": {
+            "items": {
+              "properties": {
+                "state": {
+                  "const": "complete"
+                }
+              }
+            }
+          },
+          "error": {
+            "const": null
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "pending"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "terminal_at": {
+            "const": null
+          },
+          "error": {
+            "const": null
+          },
+          "poll_after_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "terminal_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "poll_after_seconds": {
+            "const": null
+          },
+          "commit": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "committed",
+                  "not_committed"
+                ]
+              }
+            }
+          },
+          "effects": {
+            "items": {
+              "properties": {
+                "state": {
+                  "enum": [
+                    "complete",
+                    "failed"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "pending"
+          },
+          "commit": {
+            "properties": {
+              "state": {
+                "const": "committed"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "effects": {
+            "contains": {
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_started",
+                    "pending"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "failed"
+          },
+          "commit": {
+            "properties": {
+              "state": {
+                "const": "committed"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "effects": {
+            "contains": {
+              "properties": {
+                "state": {
+                  "const": "failed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "failed",
+              "superseded"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "$ref": "common-v0.2.schema.json#/$defs/error"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "superseded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "superseded_by": {
+            "$ref": "common-v0.2.schema.json#/$defs/operation"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "superseded_by": {
+            "const": null
+          }
+        }
+      }
+    }
+  ]
+}

@@ -321,6 +321,9 @@ func TestMigrationSpaceMemberStatusBackfillsActive(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// The fixture rewinds schema history; remove columns added after that version.
+	_, err = ts.GetDriver().GetDB().ExecContext(ctx, "ALTER TABLE shrimp_subject DROP COLUMN attributes")
+	require.NoError(t, err)
 	require.NoError(t, ts.Migrate(ctx))
 
 	query := "SELECT status FROM space_member WHERE space_id = ? AND user_id = ?"

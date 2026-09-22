@@ -1,0 +1,536 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.2/common-v0.2.schema.json",
+  "title": "SHRIMP 0.2 shared types",
+  "$comment": "Draft 0.2. Resolve catalog references locally. Structural validation is separate from authority, clock, equality and lifecycle validation.",
+  "$ref": "common-v0.2.schema.json#/$defs/scope",
+  "$defs": {
+    "opaque": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "handle": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+    },
+    "resource_ref": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "subject",
+            "instance",
+            "controller",
+            "binding",
+            "source_reference",
+            "group",
+            "containment",
+            "role",
+            "role_revision",
+            "assignment",
+            "dependency_record",
+            "email_verification"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "endpoint": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "subject",
+                "instance",
+                "controller",
+                "binding",
+                "source_reference",
+                "group",
+                "containment",
+                "role",
+                "role_revision",
+                "assignment",
+                "dependency_record",
+                "email_verification"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "subject",
+                "instance",
+                "controller",
+                "binding",
+                "source_reference",
+                "group",
+                "containment",
+                "role",
+                "role_revision",
+                "assignment",
+                "dependency_record",
+                "email_verification"
+              ]
+            },
+            "created_by": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+            }
+          },
+          "required": [
+            "type",
+            "created_by"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "operation": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "replay_window": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        }
+      },
+      "required": [
+        "id",
+        "replay_window"
+      ],
+      "additionalProperties": false
+    },
+    "change_origin": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "mutation"
+            },
+            "principal": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "schema_version": {
+              "enum": [
+                "0.1",
+                "0.2"
+              ]
+            },
+            "operation": {
+              "$ref": "common-v0.2.schema.json#/$defs/operation"
+            }
+          },
+          "required": [
+            "kind",
+            "principal",
+            "authority",
+            "schema_version",
+            "operation"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "native"
+            },
+            "change_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "kind",
+            "change_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "restricted"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "kind",
+            "correlation_id"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "tenant": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "domain": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "history_epoch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "schema_version": {
+          "const": "0.2"
+        },
+        "authorization_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "resource",
+        "tenant",
+        "domain",
+        "history_epoch",
+        "schema_version",
+        "authorization_context"
+      ],
+      "additionalProperties": false
+    },
+    "dependency": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "durable"
+            },
+            "issuer": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "history_epoch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "kind",
+            "issuer",
+            "id",
+            "history_epoch"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "$ref": "common-v0.2.schema.json#/$defs/dependency"
+      },
+      "minItems": 0,
+      "maxItems": 64,
+      "uniqueItems": true
+    },
+    "dependent_state": {
+      "type": "object",
+      "properties": {
+        "reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "reference",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "principal": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "subject"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "enrollment"
+            },
+            "principal": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "kind",
+            "principal"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "resource_scope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "tenant"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "resource"
+            },
+            "type": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "kind",
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "stage": {
+          "enum": [
+            "acceptance",
+            "commit",
+            "effect",
+            "recovery"
+          ]
+        },
+        "command_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recovery": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "code",
+        "stage",
+        "command_id",
+        "recovery"
+      ],
+      "additionalProperties": false
+    },
+    "attributes": {
+      "$ref": "human-attributes-v1.schema.json#/$defs/legacy_attributes"
+    },
+    "facts": {
+      "$ref": "human-attributes-v1.schema.json#/$defs/legacy_facts"
+    },
+    "view": {
+      "type": "object",
+      "properties": {
+        "resource_types": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "subject",
+              "instance",
+              "controller",
+              "binding",
+              "source_reference",
+              "group",
+              "containment",
+              "role",
+              "role_revision",
+              "assignment",
+              "dependency_record",
+              "email_verification"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true
+        },
+        "authority_filter": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "representation": {
+          "const": "full-direct-records"
+        }
+      },
+      "required": [
+        "resource_types",
+        "authority_filter",
+        "representation"
+      ],
+      "additionalProperties": false
+    },
+    "plan_reference": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "repair_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        }
+      },
+      "required": [
+        "id",
+        "digest",
+        "repair_id"
+      ],
+      "additionalProperties": false
+    },
+    "required_profiles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "maxItems": 64,
+      "uniqueItems": true
+    }
+  }
+}

@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.1/group-resource.schema.json",
+  "title": "Candidate group and independently owned containment assertion",
+  "$comment": "Candidate group wire slice; not advertised by the human HTTPS lab. Semantic checks also apply.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/group"
+    },
+    {
+      "$ref": "#/$defs/edge"
+    }
+  ],
+  "$defs": {
+    "group": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "group"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "enum": [
+                "live",
+                "deleted"
+              ]
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1
+            },
+            "attributes": {
+              "type": "object",
+              "properties": {
+                "displayName": {
+                  "type": "string",
+                  "maxLength": 1024
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "state",
+            "authority",
+            "attributes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "edge"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "relationship": {
+              "const": "contains"
+            },
+            "assertion": {
+              "enum": [
+                "present",
+                "removed"
+              ]
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1
+            },
+            "parent": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "group"
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "child": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "group"
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "subject"
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "relationship",
+            "assertion",
+            "authority",
+            "parent",
+            "child"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "revision",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "group_id": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "group"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "subject_id": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "subject"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "edge_id": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "edge"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

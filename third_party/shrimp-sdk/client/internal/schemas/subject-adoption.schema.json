@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.1/subject-adoption.schema.json",
+  "$comment": "Candidate schemas; the .example identifier is not a hosted retrieval URL. Resolve references from this directory. Semantic and Unicode/duplicate-member checks also apply.",
+  "title": "Candidate state-preserving human source adoption",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "operation": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "replay_window": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        }
+      },
+      "required": [
+        "id",
+        "replay_window"
+      ],
+      "additionalProperties": false
+    },
+    "required_capabilities": {
+      "type": "array",
+      "items": {
+        "const": "subject-adoption"
+      },
+      "uniqueItems": true,
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "execute_before": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "required_dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "const": "adopt_subject"
+          },
+          "resource": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "subject"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "expected_revision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "adoption_authorization": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+          }
+        },
+        "required": [
+          "action",
+          "resource",
+          "expected_revision",
+          "source_reference",
+          "adoption_authorization"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "reconciliation": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "repair_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "id",
+        "digest",
+        "repair_id",
+        "authority"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "required_capabilities",
+    "execute_before",
+    "required_dependencies",
+    "commands"
+  ],
+  "additionalProperties": false
+}

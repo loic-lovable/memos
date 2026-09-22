@@ -51,9 +51,18 @@ var (
 	ErrCapacity = errors.New("retained operation capacity")
 )
 
+// ScalarFact preserves an optional scalar with its own authority and revision.
+// A nil Value means explicitly cleared, not an absent field.
+type ScalarFact struct {
+	Value     *string `json:"value"`
+	Authority string  `json:"authority"`
+	Revision  string  `json:"revision"`
+}
+
 // Subject is protocol identity without an application's native account identifier.
 type Subject struct {
 	ID, SourceID, SourceRevision, SourceReference, Revision, Lifecycle, DisplayName string
+	Attributes                                                                      map[string]ScalarFact
 }
 
 // Mutation is validated single-account intent, including replay and authority checks
@@ -61,11 +70,16 @@ type Subject struct {
 type Mutation struct {
 	Principal, Window, ID, Fingerprint, Action, SubjectID, ExpectedRevision string
 	SourceReference, DisplayName                                            string
+	Authority                                                               string
+	Set                                                                     map[string]string
+	Clear                                                                   []string
 	Deadline                                                                int64
 	Dependencies                                                            []string
 	CommandID                                                               string
 	RecoverOnly                                                             bool
-	UnsupportedProfiles                                                     bool
+	// UnsupportedProfiles includes explicit and implied unsupported profile use.
+	// Apply must reject new work only after retained lookup and intent equality.
+	UnsupportedProfiles bool
 }
 
 // Result is immutable commit evidence retained atomically with the account change.

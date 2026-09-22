@@ -1,0 +1,390 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shrimp.example/schemas/0.1/reconciliation-plan.schema.json",
+  "title": "Local human reconciliation plan; no hosted approval endpoint",
+  "$defs": {
+    "source": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "frontier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "complete": {
+          "const": true
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "displayName",
+              "department",
+              "email"
+            ]
+          },
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "external_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "displayName": {
+                    "type": "string",
+                    "maxLength": 1024
+                  },
+                  "department": {
+                    "type": "string",
+                    "maxLength": 1024
+                  },
+                  "email": {
+                    "type": "string",
+                    "maxLength": 1024
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "lifecycle": {
+                "enum": [
+                  "active",
+                  "disabled"
+                ]
+              }
+            },
+            "required": [
+              "external_id",
+              "attributes"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 1000
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_id",
+        "frontier",
+        "complete",
+        "authority",
+        "fields",
+        "records"
+      ],
+      "additionalProperties": false
+    },
+    "plan": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+        },
+        "resource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "client": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "issuer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "source_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "target_frontier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "target_validator": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repairs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+              },
+              "command": {
+                "oneOf": [
+                  {
+                    "allOf": [
+                      {
+                        "$ref": "subject-mutation.schema.json#/properties/commands/items"
+                      },
+                      {
+                        "properties": {
+                          "action": {
+                            "enum": [
+                              "create_subject",
+                              "update_subject",
+                              "activate",
+                              "disable"
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "const": "update_subject"
+                      },
+                      "resource_from": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+                      },
+                      "set": {
+                        "type": "object",
+                        "properties": {
+                          "displayName": {
+                            "type": "string",
+                            "maxLength": 1024
+                          },
+                          "department": {
+                            "type": "string",
+                            "maxLength": 1024
+                          },
+                          "email": {
+                            "type": "string",
+                            "maxLength": 1024
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "clear": {
+                        "type": "array",
+                        "items": {
+                          "enum": [
+                            "displayName",
+                            "department",
+                            "email"
+                          ]
+                        },
+                        "uniqueItems": true,
+                        "maxItems": 3
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "resource_from",
+                      "set",
+                      "clear"
+                    ],
+                    "additionalProperties": false,
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "set": {
+                            "minProperties": 1
+                          }
+                        }
+                      },
+                      {
+                        "properties": {
+                          "clear": {
+                            "minItems": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "enum": [
+                          "activate",
+                          "disable"
+                        ]
+                      },
+                      "resource_from": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "resource_from"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "command"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 128
+        },
+        "classifications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "missing",
+                  "extra",
+                  "conflict",
+                  "independent",
+                  "changed",
+                  "unchanged"
+                ]
+              },
+              "external_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "resource": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "subject"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "displayName",
+                    "department",
+                    "email"
+                  ]
+                },
+                "maxItems": 3
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "kind",
+              "external_id",
+              "resource",
+              "fields",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 5000
+        },
+        "impact": {
+          "type": "object",
+          "properties": {
+            "creates": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "updates": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "clears": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "activations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "disables": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "creates",
+            "updates",
+            "clears"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "id",
+        "resource",
+        "client",
+        "issuer",
+        "source",
+        "source_digest",
+        "target_frontier",
+        "target_validator",
+        "repairs",
+        "classifications",
+        "impact"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/plan"
+}

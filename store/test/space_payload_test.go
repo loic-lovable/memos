@@ -74,6 +74,9 @@ func TestMigrationSpacePayloadBackfillsDefault(t *testing.T) {
 		Value: &storepb.InstanceSetting_BasicSetting{BasicSetting: setting},
 	})
 	require.NoError(t, err)
+	// The fixture rewinds schema history; remove columns added after that version.
+	_, err = ts.GetDriver().GetDB().ExecContext(ctx, "ALTER TABLE shrimp_subject DROP COLUMN attributes")
+	require.NoError(t, err)
 	require.NoError(t, ts.Migrate(ctx))
 	space, err = ts.GetSpace(ctx, &store.FindSpace{ID: &space.ID})
 	require.NoError(t, err)
