@@ -98,12 +98,16 @@ var localSchemas = sync.OnceValues(func() (map[string]*jsonschema.Schema, error)
 })
 
 type contract struct {
-	ID             string   `json:"id"`
-	SchemaVersion  string   `json:"schema_version"`
-	Authentication string   `json:"authentication_profile"`
-	Operations     []string `json:"operations"`
-	Profiles       []string `json:"profiles"`
-	Enumeration    struct {
+	ID              string   `json:"id"`
+	SchemaVersion   string   `json:"schema_version"`
+	Authentication  string   `json:"authentication_profile"`
+	Operations      []string `json:"operations"`
+	Profiles        []string `json:"profiles"`
+	HumanAttributes *struct {
+		MaxEmails   int    `json:"max_emails"`
+		TZDBVersion string `json:"tzdb_version"`
+	} `json:"human_attributes"`
+	Enumeration struct {
 		ResourceTypes []string `json:"resource_types"`
 	} `json:"enumeration"`
 	Schemas []struct{ ID, Path, SHA256 string } `json:"schemas"`

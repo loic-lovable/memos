@@ -19,7 +19,7 @@ import (
 
 var errShrimpConflict = errors.New("mutation_rejected")
 
-const shrimpColumns = "id, user_id, source_id, source_revision, source_reference, revision, lifecycle, display_name, attributes"
+const shrimpColumns = "id, user_id, source_id, source_revision, source_reference, revision, lifecycle, display_name, attributes, attribute_profile, human_attributes"
 
 // ShrimpEnrolled reports whether this database requires SHRIMP enforcement.
 func (d *DB) ShrimpEnrolled(ctx context.Context) (bool, error) {
@@ -30,11 +30,14 @@ func (d *DB) ShrimpEnrolled(ctx context.Context) (bool, error) {
 
 func readShrimpSubject(ctx context.Context, q rowQuerier, id string) (*store.ShrimpSubject, error) {
 	s := &store.ShrimpSubject{}
-	var attributes string
+	var attributes, human string
 	err := q.QueryRowContext(ctx, "SELECT "+shrimpColumns+" FROM shrimp_subject WHERE id=? OR source_id=?", id, id).
-		Scan(&s.ID, &s.UserID, &s.SourceID, &s.SourceRevision, &s.SourceReference, &s.Revision, &s.Lifecycle, &s.DisplayName, &attributes)
+		Scan(&s.ID, &s.UserID, &s.SourceID, &s.SourceRevision, &s.SourceReference, &s.Revision, &s.Lifecycle, &s.DisplayName, &attributes, &s.AttributeProfile, &human)
 	if err == nil {
 		err = json.Unmarshal([]byte(attributes), &s.Attributes)
+	}
+	if err == nil {
+		err = decodeShrimpHumanFacts(s, human)
 	}
 	return s, err
 }
@@ -191,7 +194,8 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 		subject, err := applyShrimpAccount(ctx, tx, m)
 		if err != nil {
 			var sqliteErr *modernsqlite.Error
-			expected := errors.Is(err, errShrimpConflict) || errors.Is(err, sql.ErrNoRows) || errors.Is(err, store.ErrLastSpaceAdmin) ||
+			code := shrimpHumanRejection(err)
+			expected := code != "" || errors.Is(err, errShrimpConflict) || errors.Is(err, sql.ErrNoRows) || errors.Is(err, store.ErrLastSpaceAdmin) ||
 				(errors.As(err, &sqliteErr) && sqliteErr.Code()&255 == 19)
 			if !expected {
 				return nil, err
@@ -199,7 +203,10 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 			if _, rollbackErr := tx.ExecContext(ctx, "ROLLBACK TO business"); rollbackErr != nil {
 				return nil, rollbackErr
 			}
-			result.Error = "mutation_rejected"
+			result.Error = code
+			if result.Error == "" {
+				result.Error = "mutation_rejected"
+			}
 		} else {
 			result.Subject = *subject
 			result.Token, err = shrimpEvent(ctx, tx, subject, m.Principal, m.Action)
@@ -231,6 +238,17 @@ func (d *DB) ApplyShrimp(ctx context.Context, m store.ShrimpMutation) (*store.Sh
 		return nil, err
 	}
 	store.ShrimpCheckpoint(ctx, "before_commit")
+	if result.Error == "" && m.Action == "migrate_human_attributes" {
+		// Administrative approval must still be current at commit, including
+		// after lock waits or a paused commit. Roll back consumption with state.
+		var expires int64
+		if err := tx.QueryRowContext(ctx, "SELECT expires_at FROM shrimp_attribute_approval WHERE authorization=? AND consumed=1", m.Migration.Authorization).Scan(&expires); err != nil {
+			return nil, err
+		}
+		if time.Now().Unix() >= expires {
+			return nil, store.ErrShrimpInsufficientScope
+		}
+	}
 	if result.Error == "" && time.Now().Unix() >= m.Deadline {
 		return nil, store.ErrShrimpExecutionDeadlineExpired
 	}
@@ -246,7 +264,12 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 		id, source, revision := random.UUID(), random.UUID(), random.UUID()
 		hash := sha256.Sum256([]byte(m.SourceReference))
 		s := &store.ShrimpSubject{ID: id, SourceID: source, SourceRevision: revision, SourceReference: m.SourceReference, Revision: revision, Lifecycle: "disabled", DisplayName: m.DisplayName}
-		if err := applyShrimpAttributes(s, m, revision); err != nil {
+		state, err := prepareShrimpAttributes(ctx, tx, s, m, revision)
+		if err != nil {
+			return nil, err
+		}
+		human, err := json.Marshal(state)
+		if err != nil {
 			return nil, err
 		}
 		attributes, err := json.Marshal(s.Attributes)
@@ -266,7 +289,7 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 				return nil, err
 			}
 		}
-		_, err = tx.ExecContext(ctx, "INSERT INTO shrimp_subject(id,user_id,source_id,source_revision,source_reference,source_key,revision,lifecycle,display_name,attributes) VALUES(?,?,?,?,?,?,?,?,?,?)", id, s.UserID, source, revision, m.SourceReference, hex.EncodeToString(hash[:]), revision, s.Lifecycle, s.DisplayName, string(attributes))
+		_, err = tx.ExecContext(ctx, "INSERT INTO shrimp_subject(id,user_id,source_id,source_revision,source_reference,source_key,revision,lifecycle,display_name,attributes,attribute_profile,human_attributes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", id, s.UserID, source, revision, m.SourceReference, hex.EncodeToString(hash[:]), revision, s.Lifecycle, s.DisplayName, string(attributes), s.AttributeProfile, string(human))
 		return s, err
 	}
 	s, err := readShrimpSubject(ctx, tx, m.SubjectID)
@@ -277,7 +300,12 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 		return nil, errShrimpConflict
 	}
 	revision := random.UUID()
-	if err := applyShrimpAttributes(s, m, revision); err != nil {
+	state, err := prepareShrimpAttributes(ctx, tx, s, m, revision)
+	if err != nil {
+		return nil, err
+	}
+	human, err := json.Marshal(state)
+	if err != nil {
 		return nil, err
 	}
 	update := &store.UpdateUser{ID: s.UserID}
@@ -303,8 +331,10 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 		s.Lifecycle = "retired"
 		state := store.Archived
 		update.RowStatus = &state
+	case "migrate_human_attributes":
+		update.Nickname = &s.DisplayName
 	case "update_subject":
-		if _, set := m.Set["displayName"]; set || m.Set == nil || slices.Contains(m.Clear, "displayName") {
+		if _, set := m.Set["displayName"]; s.AttributeProfile != "" || set || m.Set == nil || slices.Contains(m.Clear, "displayName") {
 			update.Nickname = &s.DisplayName
 		}
 	default:
@@ -320,7 +350,7 @@ func applyShrimpAccount(ctx context.Context, tx *sql.Tx, m store.ShrimpMutation)
 	if err != nil {
 		return nil, err
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE shrimp_subject SET revision=?,lifecycle=?,display_name=?,attributes=? WHERE id=?", s.Revision, s.Lifecycle, s.DisplayName, string(attributes), s.ID)
+	_, err = tx.ExecContext(ctx, "UPDATE shrimp_subject SET revision=?,lifecycle=?,display_name=?,attributes=?,attribute_profile=?,human_attributes=? WHERE id=?", s.Revision, s.Lifecycle, s.DisplayName, string(attributes), s.AttributeProfile, string(human), s.ID)
 	return s, err
 }
 

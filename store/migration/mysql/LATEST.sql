@@ -163,7 +163,9 @@ CREATE TABLE IF NOT EXISTS shrimp_subject (
   revision VARCHAR(128) NOT NULL,
   lifecycle VARCHAR(16) NOT NULL,
   display_name TEXT NOT NULL,
-  attributes TEXT NOT NULL DEFAULT ('null')
+  attributes TEXT NOT NULL DEFAULT ('null'),
+  attribute_profile VARCHAR(64) NOT NULL DEFAULT '',
+  human_attributes TEXT NOT NULL DEFAULT ('null')
 );
 CREATE TABLE IF NOT EXISTS shrimp_window (
   id VARCHAR(128) PRIMARY KEY,
@@ -230,4 +232,15 @@ CREATE TABLE IF NOT EXISTS shrimp_audit_event (
   kind VARCHAR(32) NOT NULL,
   body TEXT NOT NULL,
   INDEX shrimp_audit_attempt_kind (attempt_id, kind)
+);
+
+CREATE TABLE IF NOT EXISTS shrimp_attribute_approval (
+  authorization VARCHAR(128) PRIMARY KEY,
+  principal VARCHAR(128) NOT NULL,
+  window_id VARCHAR(128) NOT NULL,
+  operation_id VARCHAR(128) NOT NULL,
+  fingerprint VARCHAR(64) NOT NULL,
+  owners TEXT NOT NULL,
+  expires_at BIGINT NOT NULL,
+  consumed INTEGER NOT NULL DEFAULT 0
 );

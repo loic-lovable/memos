@@ -1,6 +1,6 @@
 # Typed human attribute helpers
 
-**Status:** experimental validation and transition helpers for
+**Status:** experimental decoding, validation and transition helpers for
 [`human-attributes-v1`](../../../../spec/human-attributes.md). The SDK HTTP handler
 and Memos do not enable this profile. These helpers alone are not a complete
 profile implementation or real-application conformance evidence.
@@ -28,6 +28,37 @@ preserving case, such as `EN-us`.
 The small catalogs in unit tests are fixtures, not complete release catalogs.
 This increment includes no release loader or bundled timezone database.
 
+## Decode attribute fragments
+
+Use `Profile.DecodeValues(raw)` for an `attributes` or `set` object, and
+`Profile.DecodeChanges(raw)` for exactly `{"set":{...},"clear":[...]}`. The latter
+requires both members and at least one change. The decoders enforce exact member
+names, closed object shapes, required email members and configured validation.
+They preserve an empty email array separately from omission and reject null field
+values; explicit clearing belongs in `clear`. A new email entry must include
+`"expected_generation": null` and a boolean `primary`, even when it is false.
+
+Duplicate members (including escaped spellings), malformed Unicode, trailing
+documents, set/clear overlap and repeated clear fields are rejected. Each fragment
+is limited to `MaxJSONBytes` (65,536 bytes) and `MaxJSONDepth` (16 nested containers,
+counting the root as one). Syntax errors use `ErrInvalidValue`; exceeded byte or
+depth bounds use `ErrLimitExceeded`. Every failure returns a zero result and leaves
+the input bytes unchanged. Errors never include the supplied JSON or field values.
+
+These methods are not complete request decoders. The transport must strictly
+parse and validate the entire envelope, including its own byte/depth limits,
+profile selector, command shape and unknown members. Do not first unmarshal into
+a permissive map and then re-encode a fragment: information about duplicates or
+invalid Unicode has already been lost. A validated raw fragment can be passed
+without that lossy conversion.
+
+The configured decoders enforce **current new-write rules**. Resolve authorized
+retained operations and compare original intent before applying those rules.
+Recovery after a limit/catalog change must use the original accepted contract;
+it must not reject retained work merely because today's decoder would refuse a
+new write. Successful decoding also says nothing about current field ownership,
+subject revisions or email generations. Check those in the application transaction.
+
 ## Calculate a change inside the application's transaction
 
 1. Authenticate and authorize the writer, recover retained operations before new
@@ -41,10 +72,10 @@ This increment includes no release loader or bundled timezone database.
    operation result. An error returns no partial result. On a rejected commit,
    discard the entire proposed result.
 
-`Validate` checks typed write values only. Raw JSON must first pass strict parsing
-and the selected profile schema. Ordinary `json.Unmarshal` into these structs
-cannot enforce required members or reject every unknown/duplicate member. These
-types are field values, not authenticated mutation envelopes.
+`Validate` checks already typed write values only. Use the fragment decoders above
+for JSON values. Ordinary `json.Unmarshal` into these structs cannot enforce
+required members or reject every unknown/duplicate member. These types are field
+values, not authenticated mutation envelopes.
 
 An email entry has a caller-assigned key and a target-assigned generation that
 identifies that particular address value. Existing entries require their current
@@ -68,6 +99,50 @@ compaction or eviction policy. Applications must account for its storage and
 transaction cost. Do not discard history while the subject can accept writes.
 The Go state shape does not prescribe a database layout.
 
+After strictly decoding persisted state, call `ValidateState` before returning
+facts or committing a lifecycle-only change. It rejects inconsistent ownership,
+revisions and email identifier history without applying today's email limit or
+timezone catalog to historical facts. Empty state is valid. It does not reject
+unknown or duplicate JSON members, authorize an operation, or prove that omitted
+history never existed; those checks remain with the storage adapter.
+
+## Calculate an authorized legacy migration
+
+`Profile.Migrate(current LegacyState, emailEntryID *string, revision string,
+allocate GenerationAllocator)` prepares the attribute result of
+`migrate_human_attributes`. Call it in the application transaction after recovering
+retained work, checking that the subject is a non-retired human still using the
+compatibility representation, comparing its whole-subject revision, and validating
+the exact administrative migration approval and each affected field's approval.
+The helper accepts no caller authority and cannot establish those permissions.
+
+`LegacyState.Facts` contains only the compatibility `scalar.Fact` values for
+`displayName`, `department` and `email`. Display name and department retain their
+exact values, owners and revisions. A valid non-null email becomes one primary
+entry with no inferred type, preserving its value and owner. Supply its never-used
+entry key and a generation allocator; the `emails` fact gets the new revision,
+which cannot equal the old email revision. An empty or unrepresentable legacy
+email rejects the entire migration without trimming or rewriting it.
+
+An absent email remains absent. An explicitly cleared email becomes an owned-null
+`emails` fact with its original owner and the new revision. Both cases require a
+nil entry key and allocate no generation. No other rich fields or verification
+assertions are inferred. The returned `Invalidated` list is empty.
+
+Include all retained `EntryIDs` and `Generations` in `LegacyState`, including
+history carried through restoration. Nil histories are valid only for genuine
+first use; the helper cannot recover omitted history. It copies retained history
+and rejects entry or generation reuse. Invalid metadata/history fails with
+`ErrInvalidState`; an unrepresentable email or wrong entry-key selection uses
+`ErrInvalidValue`. Generation failures use the same categories as ordinary
+transitions. Every failure returns a zero `Result` and leaves input state intact.
+
+Commit the proposed facts, histories, representation fence, new subject revision,
+native projections and retained operation result together. Authorized old scalar
+operations must retain their original recovery meaning, while new scalar writes
+must fail after migration. The pure helper provides neither that transaction nor
+the transport, authorization or persistence integration.
+
 ## Handle errors by category
 
 Use `errors.Is` for control flow and `errors.As` for optional field information.
@@ -86,7 +161,7 @@ if errors.As(err, &detail) {
 | Category | Meaning |
 |---|---|
 | `ErrInvalidValue` | Invalid field shape, clear selection or collection invariant |
-| `ErrLimitExceeded` | Email collection exceeds the configured bound |
+| `ErrLimitExceeded` | Email collection or JSON fragment exceeds its bound |
 | `ErrAuthorityConflict` | Changed fact belongs to another authority |
 | `ErrRevisionConflict` | Stale email generation or unavailable entry key |
 | `ErrInvalidConfiguration` | Invalid catalog, missing allocator/authority/revision or reused output revision |
@@ -108,10 +183,15 @@ Package tests exercise exact values, ownership, absent/empty/clear semantics,
 locale/mailbox validation, pinned catalog membership, generation transitions,
 retired key preservation after state serialization, and rejection without partial
 changes. They also check error classification through wrapping and allocator
-failure after a partial calculation. Run `go test -race ./profiles/humanattributes`
-and `go vet ./...` from `sdk/go`.
+failure after a partial calculation. Decoder tests cover malformed/ambiguous JSON,
+Unicode, exact byte/container-depth boundaries and representative schema agreement.
+Fuzz tests check rejection without partial values and successful round trips.
+Migration tests cover mixed owners, preserved revisions and spelling, absent/null
+mapping, retained fences after serialization, independent output copies, malformed
+legacy data and allocator failure without partial results.
+Run `go test -race ./profiles/humanattributes` and `go vet ./...` from `sdk/go`.
 
-Strict wire decoding, authorized conditional migration, transport dispatch,
-profile activation, application persistence/enforcement and complete observation
-surfaces remain integration work. The current handler still advertises
+Complete envelope decoding, migration authorization/commit integration, transport
+dispatch, profile activation, application persistence/enforcement and complete
+observation surfaces remain integration work. The current handler still advertises
 `profiles: []`. See the [SDK boundary design](../../../../docs/design/sdk-profiles.md).

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 
+	"github.com/lovablelabs/shrimp-protocol/sdk/go/internal/jsontext"
+
 	"github.com/pkg/errors"
 )
 
@@ -13,6 +15,9 @@ var errJSONDepth = errors.New("JSON nesting limit")
 // strictJSON rejects ambiguous duplicate members before typed decoding, including
 // nested members. A duplicate cannot change authority or logical retry equality.
 func strictJSON(data []byte, target any) error {
+	if !jsontext.Valid(data) {
+		return errors.New("invalid JSON text")
+	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	var value func(int) error
 	value = func(depth int) error {

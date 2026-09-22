@@ -30,6 +30,14 @@ func (h *Handler) directRecord(record Record) map[string]any {
 	}
 
 	var value any = map[string]any{"profile": "human", "lifecycle": s.Lifecycle, "expires_at": nil, "attributes": attributes}
+	if s.AttributeProfile != "" {
+		// Schema validation consumes JSON values, not Go struct pointers. The
+		// closed Facts type contains only JSON-representable fields.
+		raw, _ := json.Marshal(s.HumanAttributes)
+		var facts any
+		_ = json.Unmarshal(raw, &facts)
+		value = map[string]any{"profile": "human", "attribute_profile": s.AttributeProfile, "lifecycle": s.Lifecycle, "expires_at": nil, "attributes": facts}
+	}
 	if record.Type == "source_reference" {
 		revision = s.SourceRevision
 		value = map[string]any{"subject": ref("subject", s.ID), "external_id": s.SourceReference, "state": "associated"}

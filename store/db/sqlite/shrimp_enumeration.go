@@ -274,11 +274,14 @@ func enumerateShrimpRecords(ctx context.Context, tx *sql.Tx, request store.Shrim
 	for rows.Next() {
 		var record store.ShrimpRecord
 		s := &record.Subject
-		var attributes string
-		if err := rows.Scan(&record.Type, &record.ID, &s.ID, &s.UserID, &s.SourceID, &s.SourceRevision, &s.SourceReference, &s.Revision, &s.Lifecycle, &s.DisplayName, &attributes); err != nil {
+		var attributes, human string
+		if err := rows.Scan(&record.Type, &record.ID, &s.ID, &s.UserID, &s.SourceID, &s.SourceRevision, &s.SourceReference, &s.Revision, &s.Lifecycle, &s.DisplayName, &attributes, &s.AttributeProfile, &human); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(attributes), &s.Attributes); err != nil {
+			return nil, err
+		}
+		if err := decodeShrimpHumanFacts(s, human); err != nil {
 			return nil, err
 		}
 		records = append(records, record)

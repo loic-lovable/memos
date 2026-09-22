@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/lovablelabs/shrimp-protocol/sdk/go/profiles/humanattributes"
+
 	"github.com/pkg/errors"
 )
 
@@ -45,6 +47,8 @@ type ShrimpSubject struct {
 	ID, SourceID, SourceRevision, SourceReference, Revision, Lifecycle, DisplayName string
 	UserID                                                                          int32
 	Attributes                                                                      map[string]ShrimpScalarFact
+	AttributeProfile                                                                string
+	HumanAttributes                                                                 *humanattributes.Facts
 }
 
 // ShrimpMutation is a validated, single-account provisioning intent.
@@ -60,6 +64,10 @@ type ShrimpMutation struct {
 	CommandID                                                               string
 	RecoverOnly                                                             bool
 	UnsupportedProfiles                                                     bool
+	AttributeProfile                                                        string
+	HumanAttributes                                                         json.RawMessage
+	HumanProfile                                                            *humanattributes.Profile
+	Migration                                                               *ShrimpHumanMigration
 }
 
 // ShrimpResult is immutable commit evidence retained with the account write.
@@ -223,4 +231,20 @@ func ShrimpCheckpoint(ctx context.Context, point string) {
 	if fault, ok := ctx.Value(shrimpFaultKey{}).(func(string)); ok {
 		fault(point)
 	}
+}
+
+// ShrimpHumanMigration carries a separately issued administrative grant.
+type ShrimpHumanMigration struct {
+	EmailEntryID                       *string
+	Authorization, ApprovalFingerprint string
+}
+
+// ShrimpMigrationApproval is installed by a trusted local administrator, never
+// through the provisioning API. Fingerprint binds the canonical complete request
+// with command.authorization omitted. Owners names every affected fact owner.
+// The fixed enrolled database supplies the resource, tenant and history scope.
+type ShrimpMigrationApproval struct {
+	Authorization, Principal, Window, Operation, Fingerprint string
+	Owners                                                   []string
+	ExpiresAt                                                int64
 }

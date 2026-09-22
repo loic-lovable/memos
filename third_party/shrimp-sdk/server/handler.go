@@ -35,7 +35,10 @@ type Config struct {
 	Authority       string `json:"authority"`
 	SchemaDirectory string `json:"schema_directory"`
 	// ScalarAttributes requires Apply to enforce and persist Set/Clear and owned facts.
-	ScalarAttributes                                bool `json:"scalar_attributes"`
+	ScalarAttributes bool `json:"scalar_attributes"`
+	// ExperimentalHumanAttributes dispatches typed commands for application
+	// integration tests. It does not advertise profile support or completeness.
+	ExperimentalHumanAttributes                     bool `json:"experimental_human_attributes"`
 	AllowWrite                                      bool `json:"allow_write"`
 	Tenant, Domain, HistoryEpoch, DiscoveryRevision string
 	AdmissionConsumer, HealthyConditions            string
@@ -342,10 +345,11 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 	if profiles, ok := body["required_profiles"].([]any); ok && len(profiles) > 0 {
 		m.UnsupportedProfiles = true
 	}
-	if _, selected := command["attribute_profile"]; selected {
+	if selected, ok := command["attribute_profile"].(string); ok {
+		m.AttributeProfile = selected
 		// Keep implied support rejection at the application's commit boundary,
 		// after retained intent equality and authorized outcome recovery.
-		m.UnsupportedProfiles = true
+		m.UnsupportedProfiles = !h.config.ExperimentalHumanAttributes || selected != "human-attributes-v1" || m.UnsupportedProfiles
 	}
 	field, _ := command["field"].(string)
 	enterpriseCommand := m.Action == "set_enterprise_context" || m.Action == "update_enterprise_attributes" ||
@@ -357,6 +361,20 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		m.Dependencies = append(m.Dependencies, token.(string))
 	}
 	switch m.Action {
+	case "migrate_human_attributes":
+		m.UnsupportedProfiles = !h.config.ExperimentalHumanAttributes || m.UnsupportedProfiles
+		resource := command["resource"].(map[string]any)
+		m.SubjectID = resource["id"].(string)
+		m.ExpectedRevision = command["expected_revision"].(string)
+		m.Migration = &HumanAttributeMigration{Authorization: command["authorization"].(string)}
+		if entry, ok := command["email_entry_id"].(string); ok {
+			m.Migration.EmailEntryID = &entry
+		}
+		delete(command, "authorization")
+		approval, _ := json.Marshal(body)
+		command["authorization"] = m.Migration.Authorization
+		approvalHash := sha256.Sum256(approval)
+		m.Migration.ApprovalFingerprint = hex.EncodeToString(approvalHash[:])
 	case "set_enterprise_context", "update_enterprise_attributes", "transfer_authority":
 		if !enterpriseCommand {
 			h.problem(w, 400, "unsupported_command", "acceptance")
@@ -371,14 +389,16 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		attributes := command["attributes"].(map[string]any)
 		source, ok := command["source_reference"].(string)
 		name, nameOK := attributes["displayName"].(string)
-		legacyOnly := !h.config.ScalarAttributes && (!nameOK || len(attributes) != 1)
+		legacyOnly := m.AttributeProfile == "" && !h.config.ScalarAttributes && (!nameOK || len(attributes) != 1)
 		if command["profile"] != "human" || !ok || source == "" || legacyOnly {
 			h.problem(w, 400, "unsupported_create_shape", "acceptance")
 			return
 		}
 		m.SourceReference = source
 		m.DisplayName = name
-		if h.config.ScalarAttributes {
+		if m.AttributeProfile != "" {
+			m.HumanAttributes, _ = json.Marshal(attributes)
+		} else if h.config.ScalarAttributes {
 			var valid bool
 			m.Set, m.Clear, valid = scalarChanges(attributes, nil)
 			if !valid {
@@ -392,6 +412,10 @@ func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, claims *accessC
 		m.ExpectedRevision = command["expected_revision"].(string)
 		if m.Action == "update_subject" {
 			set := command["set"].(map[string]any)
+			if m.AttributeProfile != "" {
+				m.HumanAttributes, _ = json.Marshal(map[string]any{"set": set, "clear": command["clear"]})
+				break
+			}
 			name, ok := set["displayName"].(string)
 			if !h.config.ScalarAttributes && (!ok || len(set) != 1 || len(command["clear"].([]any)) != 0) {
 				h.problem(w, 400, "unsupported_attribute_update", "acceptance")

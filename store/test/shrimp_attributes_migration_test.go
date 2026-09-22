@@ -13,6 +13,8 @@ func TestMigrationShrimpScalarFactsPreservesLegacyValueAndRevision(t *testing.T)
 	ctx := context.Background()
 	ts := NewTestingStore(ctx, t)
 	db := ts.GetDriver().GetDB()
+	removeShrimpTypedSchema(ctx, t, ts)
+
 	_, err := db.ExecContext(ctx, "ALTER TABLE shrimp_subject DROP COLUMN attributes")
 	require.NoError(t, err)
 	_, err = db.ExecContext(ctx, `INSERT INTO shrimp_subject(id,user_id,source_id,source_revision,source_reference,source_key,revision,lifecycle,display_name)
@@ -34,4 +36,14 @@ func TestMigrationShrimpScalarFactsPreservesLegacyValueAndRevision(t *testing.T)
 	var again string
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT attributes FROM shrimp_subject WHERE id='legacy-subject'").Scan(&again))
 	require.Equal(t, raw, again)
+}
+
+// removeShrimpTypedSchema makes fixtures that rewind migration history match
+// the older schema before applying migrations again.
+func removeShrimpTypedSchema(ctx context.Context, t *testing.T, ts *store.Store) {
+	t.Helper()
+	for _, query := range []string{"ALTER TABLE shrimp_subject DROP COLUMN attribute_profile", "ALTER TABLE shrimp_subject DROP COLUMN human_attributes", "DROP TABLE shrimp_attribute_approval"} {
+		_, err := ts.GetDriver().GetDB().ExecContext(ctx, query)
+		require.NoError(t, err)
+	}
 }

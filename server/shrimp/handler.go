@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/lovablelabs/shrimp-protocol/sdk/go/profiles/humanattributes"
 	sdk "github.com/lovablelabs/shrimp-protocol/sdk/go/server"
 	"github.com/pkg/errors"
 
@@ -16,23 +17,26 @@ import (
 
 // Config is trusted local enrollment; no request can choose its issuer or authority.
 type Config struct {
-	Resource        string `json:"resource"`
-	Issuer          string `json:"issuer"`
-	IssuerKeyID     string `json:"issuer_key_id"`
-	IssuerKeyFile   string `json:"issuer_key_file"`
-	ClientID        string `json:"client_id"`
-	Authority       string `json:"authority"`
-	SchemaDirectory string `json:"schema_directory"`
-	AllowWrite      bool   `json:"allow_write"`
-	SSOProvider     string `json:"sso_provider,omitempty"`
+	HumanAttributeApprovals     []store.ShrimpMigrationApproval `json:"human_attribute_approvals,omitempty"`
+	Resource                    string                          `json:"resource"`
+	Issuer                      string                          `json:"issuer"`
+	IssuerKeyID                 string                          `json:"issuer_key_id"`
+	IssuerKeyFile               string                          `json:"issuer_key_file"`
+	ClientID                    string                          `json:"client_id"`
+	Authority                   string                          `json:"authority"`
+	SchemaDirectory             string                          `json:"schema_directory"`
+	AllowWrite                  bool                            `json:"allow_write"`
+	SSOProvider                 string                          `json:"sso_provider,omitempty"`
+	ExperimentalHumanAttributes bool                            `json:"experimental_human_attributes,omitempty"`
 }
 
 // Handler combines the protocol SDK with Memos-owned enrollment and persistence.
 type Handler struct {
 	*sdk.Handler
-	config Config
-	store  *store.Store
-	driver store.ShrimpDriver
+	config       Config
+	store        *store.Store
+	driver       store.ShrimpDriver
+	humanProfile *humanattributes.Profile
 	// Fault is set only by the explicitly tagged disposable-test build.
 	Fault func(string, string)
 }
@@ -50,15 +54,20 @@ func New(ctx context.Context, s *store.Store, config Config) (*Handler, error) {
 	if _, ok := driver.(store.ShrimpAuditDriver); !ok {
 		return nil, errors.New("SHRIMP pilot requires durable auditing")
 	}
-	h := &Handler{config: config, store: s, driver: driver}
+	humanProfile, err := experimentalHumanProfile(config.ExperimentalHumanAttributes)
+	if err != nil {
+		return nil, err
+	}
+	h := &Handler{config: config, store: s, driver: driver, humanProfile: humanProfile}
 	protocol, err := sdk.New(ctx, &application{handler: h}, sdk.Config{
 		Resource: config.Resource, Issuer: config.Issuer, IssuerKeyID: config.IssuerKeyID,
 		IssuerKeyFile: config.IssuerKeyFile, ClientID: config.ClientID, Authority: config.Authority,
 		SchemaDirectory: config.SchemaDirectory, AllowWrite: config.AllowWrite,
 		Tenant: "acme", Domain: "A", HistoryEpoch: "memos-pilot-1", DiscoveryRevision: "memos-pilot-3",
-		AdmissionConsumer: "memos-session-refresh-pat",
-		ScalarAttributes:  true,
-		HealthyConditions: "Disposable single-process SQLite pilot with at most 10000 unexpired retained operation results. Only listed operations, one human command per mutation, source reference required on creation; exact displayName, department and scalar email with owned set/clear. No complete profile, public audit, sync, existing-session revocation, backup restore, or multi-process admission guarantee.",
+		AdmissionConsumer:           "memos-session-refresh-pat",
+		ScalarAttributes:            true,
+		ExperimentalHumanAttributes: config.ExperimentalHumanAttributes,
+		HealthyConditions:           "Disposable single-process SQLite pilot with at most 10000 unexpired retained operation results. Only listed operations, one human command per mutation, source reference required on creation; exact displayName, department and scalar email with owned set/clear. No complete profile, public audit, sync, existing-session revocation, backup restore, or multi-process admission guarantee.",
 	})
 	if err != nil {
 		return nil, err
@@ -74,6 +83,22 @@ func New(ctx context.Context, s *store.Store, config Config) (*Handler, error) {
 	enrollment, _ := json.Marshal(identity)
 	if err := s.EnableShrimpPilot(ctx, string(enrollment)); err != nil {
 		return nil, err
+	}
+	if len(config.HumanAttributeApprovals) > 0 {
+		if humanProfile == nil {
+			return nil, errors.New("migration approvals require experimental human attributes")
+		}
+		admin, ok := driver.(interface {
+			AuthorizeShrimpAttributeMigration(context.Context, store.ShrimpMigrationApproval) error
+		})
+		if !ok {
+			return nil, errors.New("migration approval storage unavailable")
+		}
+		for _, approval := range config.HumanAttributeApprovals {
+			if err := admin.AuthorizeShrimpAttributeMigration(ctx, approval); err != nil {
+				return nil, err
+			}
+		}
 	}
 	h.Handler = protocol
 	return h, nil

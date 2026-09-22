@@ -9,7 +9,7 @@ var (
 	ErrInvalidConfiguration = errors.New("invalid profile configuration")
 	// ErrInvalidValue identifies malformed values or collection invariants.
 	ErrInvalidValue = errors.New("invalid attribute value")
-	// ErrLimitExceeded identifies a collection above the configured limit.
+	// ErrLimitExceeded identifies a collection or JSON fragment above its limit.
 	ErrLimitExceeded = errors.New("attribute limit exceeded")
 	// ErrAuthorityConflict identifies an attempt to change another owner's fact.
 	ErrAuthorityConflict = errors.New("attribute authority conflict")

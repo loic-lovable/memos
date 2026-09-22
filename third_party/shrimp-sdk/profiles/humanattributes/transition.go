@@ -68,15 +68,9 @@ func (p *Profile) apply(current State, changes Changes, authority, revision stri
 	if err := validateState(current); err != nil {
 		return Result{}, err
 	}
-	changed := fields(changes.Set)
-	for _, field := range changes.Clear {
-		if !known(field) || changed[field] {
-			return Result{}, failure(ErrInvalidValue, "", "invalid clear")
-		}
-		changed[field] = true
-	}
-	if !creating && len(changed) == 0 {
-		return Result{}, failure(ErrInvalidValue, "", "empty update")
+	changed, err := changedFields(changes, creating)
+	if err != nil {
+		return Result{}, err
 	}
 	for field := range changed {
 		owner, oldRevision := current.Facts.metadata(field)
@@ -134,6 +128,20 @@ func (p *Profile) apply(current State, changes Changes, authority, revision stri
 	}
 	result.State = next
 	return result, nil
+}
+
+func changedFields(changes Changes, allowEmpty bool) (map[Field]bool, error) {
+	changed := fields(changes.Set)
+	for _, field := range changes.Clear {
+		if !known(field) || changed[field] {
+			return nil, failure(ErrInvalidValue, "", "invalid clear")
+		}
+		changed[field] = true
+	}
+	if !allowEmpty && len(changed) == 0 {
+		return nil, failure(ErrInvalidValue, "", "empty update")
+	}
+	return changed, nil
 }
 
 func replaceEmails(next *State, requested []EmailInput, allocate GenerationAllocator) ([]Email, []EmailVersion, error) {

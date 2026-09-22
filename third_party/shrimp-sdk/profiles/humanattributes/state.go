@@ -1,5 +1,12 @@
 package humanattributes
 
+// ValidateState checks stored facts and retained identifier history independently
+// of current profile limits and timezone catalogs. Empty State is valid. This is
+// not strict JSON decoding, authorization, or proof that history is complete.
+func ValidateState(s State) error {
+	return validateState(s)
+}
+
 func validFact[T any](f *Fact[T], valid func(T) bool) bool {
 	return f == nil || (token(f.Authority) && token(f.Revision) && (f.Value == nil || valid(*f.Value)))
 }

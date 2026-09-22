@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"strconv"
-	"unicode/utf8"
+
+	"github.com/lovablelabs/shrimp-protocol/sdk/go/internal/jsontext"
 )
 
 // ParseDocument uses the same bounded, duplicate-free JSON parser as the wire
@@ -19,7 +19,7 @@ func decodeJSON(raw []byte) (any, error) {
 }
 
 func decodeJSONLimit(raw []byte, maximum int64) (any, error) {
-	if int64(len(raw)) > maximum || !utf8.Valid(raw) || !json.Valid(raw) || !validSurrogates(raw) {
+	if int64(len(raw)) > maximum || !jsontext.Valid(raw) {
 		return nil, errors.New("invalid or oversized JSON response")
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
@@ -66,33 +66,4 @@ func jsonValue(d *json.Decoder, depth int) (any, error) {
 	default:
 		return t, nil
 	}
-}
-
-func validSurrogates(raw []byte) bool {
-	for i := 0; i < len(raw); i++ {
-		if raw[i] != '\\' {
-			continue
-		}
-		i++
-		if raw[i] != 'u' {
-			continue
-		}
-		n, _ := strconv.ParseUint(string(raw[i+1:i+5]), 16, 16)
-		i += 4
-		if n >= 0xdc00 && n <= 0xdfff {
-			return false
-		}
-		if n < 0xd800 || n > 0xdbff {
-			continue
-		}
-		if i+6 >= len(raw) || raw[i+1] != '\\' || raw[i+2] != 'u' {
-			return false
-		}
-		low, _ := strconv.ParseUint(string(raw[i+3:i+7]), 16, 16)
-		if low < 0xdc00 || low > 0xdfff {
-			return false
-		}
-		i += 6
-	}
-	return true
 }

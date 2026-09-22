@@ -3,7 +3,7 @@ package shrimp
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	stderrors "errors"
 
 	sdk "github.com/lovablelabs/shrimp-protocol/sdk/go/server"
 	"github.com/pkg/errors"
@@ -42,7 +42,7 @@ func adapterError(err error) error {
 		if errors.Is(err, mapping.native) {
 			// Preserve native context for internal diagnostics. The SDK emits only
 			// its bounded public category, never this wrapped error text.
-			return fmt.Errorf("%w: %w", mapping.sdk, err)
+			return stderrors.Join(mapping.sdk, err)
 		}
 	}
 	var enumeration store.ShrimpEnumerationError
@@ -61,7 +61,7 @@ func subject(s store.ShrimpSubject) sdk.Subject {
 		}
 	}
 	return sdk.Subject{ID: s.ID, SourceID: s.SourceID, SourceRevision: s.SourceRevision,
-		SourceReference: s.SourceReference, Revision: s.Revision, Lifecycle: s.Lifecycle, DisplayName: s.DisplayName, Attributes: attributes}
+		SourceReference: s.SourceReference, Revision: s.Revision, Lifecycle: s.Lifecycle, DisplayName: s.DisplayName, Attributes: attributes, AttributeProfile: s.AttributeProfile, HumanAttributes: s.HumanAttributes}
 }
 
 func result(r *store.ShrimpResult) *sdk.Result {
@@ -82,12 +82,17 @@ func (a *application) Apply(ctx context.Context, m sdk.Mutation) (*sdk.Result, e
 	if h.Fault != nil {
 		ctx = store.WithShrimpFault(ctx, func(point string) { h.Fault(m.ID, point) })
 	}
+	var migration *store.ShrimpHumanMigration
+	if m.Migration != nil {
+		migration = &store.ShrimpHumanMigration{EmailEntryID: m.Migration.EmailEntryID, Authorization: m.Migration.Authorization, ApprovalFingerprint: m.Migration.ApprovalFingerprint}
+	}
 	r, err := h.store.ApplyShrimp(ctx, store.ShrimpMutation{
 		Principal: m.Principal, Window: m.Window, ID: m.ID, Fingerprint: m.Fingerprint,
 		Action: m.Action, SubjectID: m.SubjectID, ExpectedRevision: m.ExpectedRevision,
 		SourceReference: m.SourceReference, DisplayName: m.DisplayName, Authority: m.Authority, Set: m.Set, Clear: m.Clear, SSOProvider: h.config.SSOProvider,
 		Deadline: m.Deadline, Dependencies: m.Dependencies, CommandID: m.CommandID,
 		RecoverOnly: m.RecoverOnly, UnsupportedProfiles: m.UnsupportedProfiles,
+		AttributeProfile: m.AttributeProfile, HumanAttributes: m.HumanAttributes, HumanProfile: h.humanProfile, Migration: migration,
 	})
 	return result(r), adapterError(err)
 }

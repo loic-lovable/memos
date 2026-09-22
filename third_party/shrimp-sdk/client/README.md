@@ -49,7 +49,8 @@ Here `peer` is an authenticated, discovered client and `saveIntent` is your stor
 callback. Store the intent together with the source event or job that caused it,
 so a worker restart finds the original operation instead of creating another one.
 The SDK cannot verify your storage durability. Saved intents contain account data;
-protect them against disclosure and tampering. They contain no tokens or keys.
+protect them against disclosure and tampering. They exclude authentication tokens
+and private keys; migration intents include a sensitive administrative approval handle.
 
 For existing subjects, `ReadSubject` returns a validated human record. Carry its
 `id`, `revision`, and `authority` into `SubjectVersion`. On a revision conflict,
@@ -63,6 +64,51 @@ by matching email.
 clear preserves its owner with a null value. The target must implement this scalar
 surface; the SDK cannot add it to an older application adapter. These helpers do
 not select `human-attributes-v1` or publish verified email assertions.
+
+## Typed human attributes and migration
+
+`PrepareHumanCreate` and `PrepareHumanUpdate` select `human-attributes-v1` and add
+its `baseline` and `human` dependencies to the request. They require the peer to
+advertise all three profiles. `HumanAttributeLimits` returns the selected maximum
+email count and timezone catalog version. Obtain and verify that exact catalog,
+then construct a [humanattributes.Profile](../profiles/humanattributes/README.md)
+with matching settings. The client validates typed values before obtaining a
+replay window; the application still checks ownership, generations and revisions
+inside its transaction.
+
+`HumanWithAttributes` creates a disabled subject and requires a stable source
+reference. `PrepareHumanUpdate` takes `SubjectVersion` and
+`humanattributes.Changes`; omission preserves a field, while `Clear` removes its
+value but preserves ownership. Neither helper turns an email address into an
+identity link or a verification assertion.
+
+Existing scalar subjects require explicit administrative migration:
+
+1. Call `PrepareHumanMigration(ctx, subjectVersion, emailEntryID)` and durably save
+   the returned `PendingHumanMigration.Bytes()`. Use a fresh entry ID for a
+   non-null scalar email; use nil for absent or cleared email.
+2. Request approval from the application's trusted administrator using the fixed
+   proposal. `Request()` returns canonical request bytes with authorization
+   omitted; `Fingerprint()` returns their SHA-256 digest. The grant must also bind
+   the enrollment, principal and every affected owner at the expected revision.
+3. Call `AuthorizeHumanMigration(pending, handle)` to attach the issued handle.
+   This helper does not issue or validate approval. It preserves the operation ID,
+   replay window, subject revision, entry ID and deadline.
+4. Submit the final `Intent` with the usual durable saver. After response loss,
+   restore and recover that exact intent. A pending proposal cannot be submitted
+   as an ordinary intent.
+
+After a restart, `RestoreHumanMigration` restores a saved proposal without
+discovery or a replacement window. Approval must arrive before its original
+execution deadline; attaching it does not extend the deadline. A stale revision
+or expired proposal requires a new explicit decision and approval. Protect both
+the proposal and final intent against tampering: restoration checks structure and
+enrollment, not administrative authority.
+
+The current SDK server and Memos pilot still advertise `profiles: []`. The public
+client helpers therefore refuse new typed work against those endpoints. Their
+positive runtime integration uses an explicit disposable developer mode; it is
+not a claim of complete profile support.
 
 ## Recovery and boundaries
 
@@ -78,16 +124,18 @@ unbounded retry loop or automatic token renewal. Renew authentication explicitly
 and retain the same intent. Client instances are not safe for concurrent use.
 
 The existing CLI's legacy 0.1 diagnostics and test helpers remain available for
-compatibility. New provisioning helpers support only single-command human create,
-activate, disable and scalar updates. Enumeration retains its separate cursor retry contract.
-Structured human attributes, groups, provider adapters, stable API guarantees and full
-baseline conformance remain outside this slice.
+compatibility. New provisioning helpers support single-command human creation,
+activation, disable, scalar or typed updates, and explicit attribute migration.
+Enumeration retains its separate cursor retry contract. Groups, provider adapters,
+stable API guarantees and full baseline conformance remain outside this slice.
 
 ## Verification
 
 From `sdk/go`, run `go test -race ./...` and `go vet ./...`.
 Tests cover saved-intent failures, response loss, recovery with a new client,
 byte-identical retries, enrollment mismatch and shortened retention promises.
+Typed tests also cover discovery preflight, unchanged approval proposals across
+restart, approval fingerprints, and migration recovery after support withdrawal.
 Existing authentication, receipt, lifecycle and enumeration tests moved with the
 implementation. Root-module tests check embedded schema/fixture snapshots against
 the canonical repository files.

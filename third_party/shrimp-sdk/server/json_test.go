@@ -42,3 +42,14 @@ func TestStrictJSONDepthBoundary(t *testing.T) {
 		})
 	}
 }
+
+func TestStrictJSONPreservesUnicodeBeforeCanonicalization(t *testing.T) {
+	for _, input := range []string{`{"value":"\ud800"}`, `{"value":"\udc00"}`, "{\"value\":\"\xff\"}", `{"\u0061":1,"a":2}`} {
+		var body map[string]any
+		require.Error(t, strictJSON([]byte(input), &body))
+	}
+	for _, input := range []string{`{"value":"\ud83d\ude00"}`, `{"value":"\ufffd"}`, `{"value":"\\ud800"}`} {
+		var body map[string]any
+		require.NoError(t, strictJSON([]byte(input), &body))
+	}
+}

@@ -127,9 +127,9 @@ func validEmail(id, value string, kind *string) bool {
 		(kind == nil || *kind == "work" || *kind == "home" || *kind == "other")
 }
 
-// Validate checks typed write values and collection invariants. Raw JSON must
-// separately pass strict parsing and the profile schema before conversion; a Go
-// struct cannot detect unknown, duplicate or missing JSON object members.
+// Validate checks typed write values and collection invariants. Use DecodeValues
+// or DecodeChanges for raw attribute fragments; a Go struct cannot detect unknown,
+// duplicate or missing JSON object members. Full envelopes need separate validation.
 func (p *Profile) Validate(values Values) error {
 	if p == nil || p.zones == nil {
 		return failure(ErrInvalidConfiguration, "", "unconfigured profile")

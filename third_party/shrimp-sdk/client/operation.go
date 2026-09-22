@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 
@@ -29,7 +30,8 @@ type Human struct {
 type SubjectVersion struct{ ID, Revision, Authority string }
 
 // Intent is an immutable, enrollment-bound request and its original window evidence.
-// Persist Bytes before sending. It contains account data but no credentials.
+// Persist Bytes before sending. It contains account data and may contain a
+// migration approval handle; it excludes authentication tokens and private keys.
 // A zero Intent cannot be submitted.
 type Intent struct {
 	raw    string
@@ -91,6 +93,10 @@ func (c *Client) prepareTransition(ctx context.Context, s SubjectVersion, action
 }
 
 func (c *Client) prepare(ctx context.Context, authority string, command map[string]any) (Intent, error) {
+	return c.prepareProfiles(ctx, authority, command, nil)
+}
+
+func (c *Client) prepareProfiles(ctx context.Context, authority string, command map[string]any, required []string) (Intent, error) {
 	if c.profile.Version != "0.2" {
 		return Intent{}, errors.New("provisioning requires version 0.2")
 	}
@@ -118,7 +124,13 @@ func (c *Client) prepare(ctx context.Context, authority string, command map[stri
 	if closes.Before(deadline) {
 		deadline = closes
 	}
-	request := map[string]any{"schema_version": "0.2", "operation": map[string]any{"id": rand.Text(), "replay_window": r.value["replay_window"]}, "expected_authority": authority, "required_capabilities": []string{}, "required_profiles": c.profile.DiscoveryProfiles(), "required_dependencies": []string{}, "reconciliation": nil, "execute_before": deadline.Format("2006-01-02T15:04:05Z"), "commands": []any{command}}
+	profiles := c.profile.DiscoveryProfiles()
+	for _, profile := range required {
+		if !slices.Contains(profiles, profile) {
+			profiles = append(profiles, profile)
+		}
+	}
+	request := map[string]any{"schema_version": "0.2", "operation": map[string]any{"id": rand.Text(), "replay_window": r.value["replay_window"]}, "expected_authority": authority, "required_capabilities": []string{}, "required_profiles": profiles, "required_dependencies": []string{}, "reconciliation": nil, "execute_before": deadline.Format("2006-01-02T15:04:05Z"), "commands": []any{command}}
 	if _, err := c.lifecycleBody02(request, mutation02); err != nil {
 		return Intent{}, err
 	}
@@ -163,7 +175,7 @@ func (c *Client) RestoreIntent(raw []byte) (Intent, error) {
 		if command["profile"] != "human" {
 			return Intent{}, errors.New("only human creation is supported")
 		}
-	case "activate", "disable", "update_subject":
+	case "activate", "disable", "update_subject", "migrate_human_attributes":
 	default:
 		return Intent{}, errors.New("unsupported saved action")
 	}

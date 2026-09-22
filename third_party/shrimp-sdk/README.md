@@ -157,8 +157,8 @@ existing representation. Clears are owned null facts; unrelated lifecycle change
 must preserve field revisions. Memos supplies this storage and maps display name to
 its native nickname. Other application adapters retain the display-name-only default.
 
-This extension does not select or advertise `human-attributes-v1`; richer selectors
-remain unsupported. The [Memos mapping](../../pilots/memos/human-attributes.md)
+This scalar extension does not select or advertise `human-attributes-v1`; the
+separate typed development switch is described below. The [Memos mapping](../../pilots/memos/human-attributes.md)
 records that profile's remaining implementation work.
 
 `profiles/scalar` supplies the shared compatibility types, decoding and pure
@@ -171,15 +171,48 @@ the caller, manage a replay window or commit anything.
 
 ## Typed human attribute helpers
 
-[`profiles/humanattributes`](profiles/humanattributes/README.md) provides typed
-values, validation and proposed state transitions for structured names, email
-entries/generations and locale/timezone preferences. It checks field ownership,
+[`profiles/humanattributes`](profiles/humanattributes/README.md) provides strict
+attribute-fragment decoding, typed values, validation and proposed transitions for
+structured names, email entries/generations and locale/timezone preferences. It checks field ownership,
 preserves exact facts, refuses retired entry keys and returns the email versions
 whose verification assertions the application must invalidate atomically.
 Callers supply trusted profile configuration and durable identifier history.
 Errors support `errors.Is` categories and `errors.As` field details.
+`DecodeValues` and `DecodeChanges` reject ambiguous JSON, missing members and
+unknown fields under explicit byte/depth bounds. The transport must still validate
+the whole envelope and resolve retained operations before current new-write rules.
 
-This package does not yet have transport dispatch, conditional migration or a
-Memos integration. Importing it does not activate `human-attributes-v1`; the
-handler still rejects that profile and advertises `profiles: []`. Its unit tests
-are helper evidence, separate from the real-application scalar pilot checks.
+The package also proposes explicit scalar migration and validates stored state
+independently of current write limits. Transport dispatch and Memos transactions
+are connected through the development boundary below. Importing the helper does
+not activate `human-attributes-v1`; discovery remains `profiles: []`. Helper tests
+and real-application observations remain separate evidence.
+
+## Typed human attribute integration tests
+
+`Config.ExperimentalHumanAttributes` dispatches selected typed create/update and
+explicit `migrate_human_attributes` commands to an application's transaction.
+This is a development switch: discovery still advertises no profiles, and
+requests requiring `human-attributes-v1` still fail closed. It is not a supported
+profile deployment or a substitute for its baseline dependencies.
+
+The handler strictly checks the whole JSON envelope, including duplicate members
+and malformed Unicode, before computing retry equality. `Mutation.HumanAttributes`
+contains the exact parsed values/changes fragment; the application uses its
+configured `humanattributes.Profile` to decode it only after retained lookup and
+intent equality. This preserves recovery when timezone catalogs, email limits,
+write permission or profile support change. `Subject.HumanAttributes` contains
+public facts only; identifier history stays in application storage.
+
+`Mutation.Migration` carries an opaque administrative handle and an approval
+fingerprint. The latter is SHA-256 of canonical complete request JSON with the
+command's `authorization` member omitted. The retry fingerprint includes the
+handle. The application checks the grant against the exact principal, operation,
+scope and affected authorities, then atomically consumes it with representation,
+state, old-writer fence and retained result. Supplying a handle does not authorize
+anything on its own. The SDK contains no approval database or administrator role.
+
+The Memos [typed development runner](../../pilots/memos/human_attributes.py)
+checks this boundary against the real app. Normal Memos builds refuse the switch;
+only the disposable `shrimptest` build enables it. Atomic attribute-plus-lifecycle
+commands and broader profile obligations remain before advertisement.

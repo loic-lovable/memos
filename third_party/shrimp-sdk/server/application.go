@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
+	"github.com/lovablelabs/shrimp-protocol/sdk/go/profiles/humanattributes"
 	"github.com/lovablelabs/shrimp-protocol/sdk/go/profiles/scalar"
 )
 
@@ -65,6 +67,8 @@ type ScalarFact = scalar.Fact
 type Subject struct {
 	ID, SourceID, SourceRevision, SourceReference, Revision, Lifecycle, DisplayName string
 	Attributes                                                                      map[string]ScalarFact
+	AttributeProfile                                                                string
+	HumanAttributes                                                                 *humanattributes.Facts
 }
 
 // Mutation is validated single-account intent, including replay and authority checks
@@ -82,6 +86,24 @@ type Mutation struct {
 	// UnsupportedProfiles includes explicit and implied unsupported profile use.
 	// Apply must reject new work only after retained lookup and intent equality.
 	UnsupportedProfiles bool
+	// AttributeProfile selects the stored representation. HumanAttributes is the
+	// strictly parsed fragment (values for create, changes for update), preserved
+	// without applying current limits. Apply must decode it only AFTER retained
+	// lookup and intent equality, inside its account transaction.
+	AttributeProfile string
+	HumanAttributes  json.RawMessage
+	Migration        *HumanAttributeMigration
+}
+
+// HumanAttributeMigration carries an opaque administrative approval handle.
+// The application must check current migration authority and every affected
+// owner, bound to this exact operation, scope, subject and expected revision.
+type HumanAttributeMigration struct {
+	EmailEntryID  *string
+	Authorization string
+	// ApprovalFingerprint is SHA-256 of canonical intent with authorization
+	// omitted. It binds the grant without a circular dependency on its handle.
+	ApprovalFingerprint string
 }
 
 // Result is immutable commit evidence retained atomically with the account change.

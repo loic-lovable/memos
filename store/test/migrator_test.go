@@ -322,6 +322,7 @@ func TestMigrationSpaceMemberStatusBackfillsActive(t *testing.T) {
 	require.NoError(t, err)
 
 	// The fixture rewinds schema history; remove columns added after that version.
+	removeShrimpTypedSchema(ctx, t, ts)
 	_, err = ts.GetDriver().GetDB().ExecContext(ctx, "ALTER TABLE shrimp_subject DROP COLUMN attributes")
 	require.NoError(t, err)
 	require.NoError(t, ts.Migrate(ctx))

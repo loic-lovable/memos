@@ -1,8 +1,11 @@
 // Package humanattributes supplies typed values and transitions for the
-// human-attributes-v1 draft. It does not authorize requests, own storage, migrate
-// legacy records, or enable a server profile. Applications commit its results
-// with subject revisions, verification invalidations and retained operations.
+// human-attributes-v1 draft, including pure legacy migration calculations.
+// It does not authorize requests, own storage, or enable a server profile.
+// Applications commit its results with subject revisions, verification
+// invalidations and retained operations.
 package humanattributes
+
+import "github.com/lovablelabs/shrimp-protocol/sdk/go/profiles/scalar"
 
 // ID is the representation selector; importing this package does not enable it.
 const ID = "human-attributes-v1"
@@ -88,6 +91,17 @@ type State struct {
 	Facts       Facts           `json:"facts"`
 	EntryIDs    map[string]bool `json:"entry_ids"`
 	Generations map[string]bool `json:"generations"`
+}
+
+// LegacyState is the compatibility representation and any retained email
+// identifier history for the same subject. Facts accepts only displayName,
+// department and email. History must include identifiers retained across restore
+// or earlier transitions; nil history is valid only when no identifiers existed.
+// Applications must resolve missing legacy owners before migration.
+type LegacyState struct {
+	Facts       map[string]scalar.Fact `json:"facts"`
+	EntryIDs    map[string]bool        `json:"entry_ids"`
+	Generations map[string]bool        `json:"generations"`
 }
 
 // EmailVersion identifies a removed or replaced value whose verification
